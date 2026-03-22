@@ -47,19 +47,18 @@ As the platform operator, I want the ingestion service to automatically recover 
 
 ---
 
-### User Story 3 - News and Sentiment Events Entering the Pipeline (Priority: P3)
+### User Story 3 - News Articles Entering the Pipeline (Priority: P3)
 
-As a strategy developer, I want news articles and sentiment scores from external sources to flow into the same event stream as market data so that sentiment-based strategies receive normalized events alongside price data.
+As a strategy developer, I want news articles from external sources to flow into the event stream so that the separate sentiment engine and sentiment-based strategies receive normalized article events alongside price data.
 
-**Why this priority**: The platform design includes sentiment as a core signal source and sentiment strategies are one of the named strategy categories. However, strategies and probabilities can function with market data only, making this lower priority than the core price feed.
+**Why this priority**: The platform design includes sentiment as a core signal source and sentiment strategies are one of the named strategy categories. However, strategies and probabilities can function with market data only, making this lower priority than the core price feed. Sentiment scoring itself is owned by the separate `nexus-sentiment` service.
 
-**Independent Test**: Configure at least one news source (e.g., NewsAPI or RSS feed), start the ingestion service, and observe `NewsArticle` and `SentimentScore` events appearing in the Redis Stream within the configured polling interval.
+**Independent Test**: Configure at least one news source (e.g., NewsAPI or RSS feed), start the ingestion service, and observe `NewsArticle` events appearing in the `nexus:news-events` Redis Stream within the configured polling interval.
 
 **Acceptance Scenarios**:
 
 1. **Given** a news adapter is configured with a valid source, **When** a new article is fetched, **Then** a `NewsArticle` event with `source`, `asset` (if determinable), `timestamp`, `headline`, and `url` fields is published to the Redis Stream.
-2. **Given** a `NewsArticle` event is in the pipeline, **When** the NLP sentiment pipeline processes it, **Then** a `SentimentScore` event referencing the original article is published with a score in `[-1.0, 1.0]` and a confidence value.
-3. **Given** the news source is unreachable, **When** a fetch attempt fails, **Then** the failure is logged, a health alert is emitted, and the adapter retries on the next polling interval without crashing the service.
+2. **Given** the news source is unreachable, **When** a fetch attempt fails, **Then** the failure is logged, a health alert is emitted, and the adapter retries on the next polling interval without crashing the service.
 
 ---
 
@@ -113,6 +112,7 @@ As a strategy developer, I want news articles and sentiment scores from external
 - **MarketEvent**: The normalized envelope for all data. Contains `source` (adapter name + exchange id), `asset` (unified symbol e.g. `BTC/USDT`), `timestamp` (UTC ISO-8601), `event_type` (enum), `payload` (event-type-specific data).
 - **Tick**: Payload within a MarketEvent. Represents a single best-bid/best-ask snapshot: `bid`, `ask`, `last`, `volume_24h`.
 - **OrderBookUpdate**: Payload with `bids` and `asks` as sorted price-level arrays with quantities.
+- **Trade**: Payload for a single completed exchange transaction: `trade_id` (exchange-assigned), `price`, `amount`, `side` (`"buy"` or `"sell"`), `taker_or_maker` (optional).
 - **Candle**: OHLCV payload with `open`, `high`, `low`, `close`, `volume`, `timeframe`.
 - **NewsArticle**: Payload with `headline`, `body_summary`, `url`, `source_name`, `published_at`, `related_assets` (list, may be empty).
 - **SentimentScore**: Payload produced by the separate `nexus-sentiment` service (not ingestion). Contains `news_article_event_id` (reference to originating NewsArticle event), `score` (float, -1.0 to 1.0), `confidence` (float, 0.0 to 1.0), `model_version` (string). Published to the same Redis Stream as market events.
@@ -132,105 +132,7 @@ As a strategy developer, I want news articles and sentiment scores from external
 
 - **SC-001**: Within 5 seconds of the ingestion service starting, at least one `MarketEvent` per subscribed asset appears in the Redis Stream for each configured exchange.
 - **SC-002**: After a simulated exchange WebSocket disconnection, the service resumes publishing events for the affected exchange within 30 seconds without manual intervention.
-- **SC-003**: 100% of events published to Redis are also persisted to TimescaleDB within 5 seconds, verified by record count comparison over a 10-minute observation window.
+- **SC-003**: Under steady-state operation (all infrastructure healthy, excluding outage windows), 100% of events published to Redis are also persisted to TimescaleDB within 10 seconds, verified by record count comparison over a 10-minute observation window.
 - **SC-004**: Zero events from a failed adapter affect the event stream of other adapters — each adapter's failure is fully isolated.
 - **SC-005**: The health endpoint responds within 200ms and reflects the true connection status of each adapter.
 - **SC-006**: No exchange API credentials appear in application logs, metrics, or event payloads under any operational condition.
-
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-2. **Given** [initial state], **When** [action], **Then** [expected outcome]
-
----
-
-### User Story 2 - [Brief Title] (Priority: P2)
-
-[Describe this user journey in plain language]
-
-**Why this priority**: [Explain the value and why it has this priority level]
-
-**Independent Test**: [Describe how this can be tested independently]
-
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-
----
-
-### User Story 3 - [Brief Title] (Priority: P3)
-
-[Describe this user journey in plain language]
-
-**Why this priority**: [Explain the value and why it has this priority level]
-
-**Independent Test**: [Describe how this can be tested independently]
-
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-
----
-
-[Add more user stories as needed, each with an assigned priority]
-
-### Edge Cases
-
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right edge cases.
--->
-
-- What happens when [boundary condition]?
-- How does system handle [error scenario]?
-
-## Requirements *(mandatory)*
-
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
--->
-
-### Functional Requirements
-
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
-
-*Example of marking unclear requirements:*
-
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
-
-### Safety & Risk Constraints *(mandatory for decision, risk, or execution changes)*
-
-- **SRC-001**: [Describe the risk validation requirement before any action is executed]
-- **SRC-002**: [Describe kill-switch/circuit-breaker behavior under failure conditions]
-- **SRC-003**: [Describe mandatory safeguards, limits, or fail-closed behavior]
-
-### Service Boundary & Contract Impact *(mandatory for cross-service changes)*
-
-- **SBC-001**: [List affected service boundaries: ingestion, strategy, aggregator, risk, executor, API/backtest]
-- **SBC-002**: [List message/schema changes and backward-compatibility expectations]
-- **SBC-003**: [List required spec/task updates across affected services]
-
-### Key Entities *(include if feature involves data)*
-
-- **[Entity 1]**: [What it represents, key attributes without implementation]
-- **[Entity 2]**: [What it represents, relationships to other entities]
-
-## Success Criteria *(mandatory)*
-
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
-
-### Measurable Outcomes
-
-- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
-- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
-- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
-- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
