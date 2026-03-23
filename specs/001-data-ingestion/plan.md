@@ -15,7 +15,7 @@ Build the foundational data ingestion service (`nexus-ingestion`) that connects 
 **Testing**: `pytest`, `pytest-asyncio`, `hypothesis` (property-based for schema validation), `testcontainers-python` (Redis + TimescaleDB integration tests), `syrupy` (snapshot tests for event serialization)
 **Target Platform**: Docker Compose (dev profile), Linux server (production)
 **Project Type**: Event-driven microservice (long-running asyncio process with health HTTP endpoint)
-**Performance Goals**: First event within 5s of startup; sub-1s exchange-to-Redis latency; health endpoint <200ms; TimescaleDB persistence within 5s of Redis publish
+**Performance Goals**: First event within 5s of startup; sub-1s exchange-to-Redis latency; health endpoint <200ms; TimescaleDB persistence within 10s of Redis publish
 **Constraints**: Read-only exchange access (SRC-001); no credentials in logs/events (SRC-003); adapter isolation — one failing adapter must not affect others (FR-004); async TimescaleDB persistence decoupled from Redis publishing (FR-008, Clarification 1)
 **Scale/Scope**: Initial: 1 exchange (Binance), 2-5 assets (BTC/USDT, ETH/USDT, etc.), 1 news source (RSS or NewsAPI). Architecture supports N exchanges and M news sources via adapter pattern.
 
