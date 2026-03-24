@@ -1,0 +1,51 @@
+# serializer version: 1
+# name: TestMarketEventContracts.test_candle_serialization
+  dict({
+    'asset': 'BTC/USDT',
+    'event_type': 'CANDLE',
+    'payload': '{"close": 67234.8, "high": 67300.0, "low": 67150.0, "open": 67200.0, "timeframe": "1m", "volume": 456.78}',
+    'schema_version': '1.0.0',
+    'source': 'binance:exchange',
+    'timestamp': '2026-03-22T14:30:00.123000+00:00',
+  })
+# ---
+# name: TestMarketEventContracts.test_orderbook_serialization
+  dict({
+    'asset': 'BTC/USDT',
+    'event_type': 'ORDER_BOOK_UPDATE',
+    'payload': '{"asks": [[67235.1, 0.8], [67235.5, 1.2]], "bids": [[67234.5, 1.5], [67234.0, 2.3]], "depth": 10}',
+    'schema_version': '1.0.0',
+    'source': 'binance:exchange',
+    'timestamp': '2026-03-22T14:30:00.123000+00:00',
+  })
+# ---
+# name: TestMarketEventContracts.test_tick_serialization
+  dict({
+    'asset': 'BTC/USDT',
+    'event_type': 'TICK',
+    'payload': '{"ask": 67235.1, "bid": 67234.5, "last": 67234.8, "volume_24h": 12345.67}',
+    'schema_version': '1.0.0',
+    'source': 'binance:exchange',
+    'timestamp': '2026-03-22T14:30:00.123000+00:00',
+  })
+# ---
+# name: TestMarketEventContracts.test_trade_serialization
+  dict({
+    'asset': 'BTC/USDT',
+    'event_type': 'TRADE',
+    'payload': '{"amount": 0.15, "price": 67234.8, "side": "buy", "taker_or_maker": "taker", "trade_id": "123456789"}',
+    'schema_version': '1.0.0',
+    'source': 'binance:exchange',
+    'timestamp': '2026-03-22T14:30:00.123000+00:00',
+  })
+# ---
+# name: TestNewsEventContracts.test_news_article_serialization
+  dict({
+    'asset': '',
+    'event_type': 'NEWS_ARTICLE',
+    'payload': '{"body_summary": "Bitcoin prices reached a new all-time high...", "headline": "Bitcoin Surges Past $70K as ETF Inflows Accelerate", "published_at": "2026-03-22T10:15:00Z", "related_assets": ["BTC/USDT", "ETH/USDT"], "source_name": "coindesk", "url": "https://example.com/article/bitcoin-surges"}',
+    'schema_version': '1.0.0',
+    'source': 'newsapi:news',
+    'timestamp': '2026-03-22T14:30:00.123000+00:00',
+  })
+# ---

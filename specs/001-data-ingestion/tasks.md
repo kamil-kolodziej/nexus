@@ -24,11 +24,11 @@
 
 **Purpose**: Establish monorepo package structure, dependency manifests, and dev infrastructure
 
-- [ ] T001 Create monorepo packages/ directory structure with all subdirectories and __init__.py files per plan.md project structure
-- [ ] T002 Initialize nexus-common package with pyproject.toml (pydantic>=2.0, pydantic-settings, redis[hiredis]>=5.0 dependencies) in packages/nexus-common/pyproject.toml
-- [ ] T003 [P] Initialize nexus-ingestion package with pyproject.toml (ccxt>=4.0, asyncpg, aiohttp, feedparser, fastapi, uvicorn, uvloop + dev: pytest, pytest-asyncio, hypothesis, testcontainers, syrupy) in packages/nexus-ingestion/pyproject.toml
-- [ ] T004 [P] Create Docker Compose dev profile with Redis 7 (port 6379) and TimescaleDB (port 5432) services in docker-compose.dev.yml
-- [ ] T005 [P] Create example configuration with exchange, redis, timescaledb, news, and monitoring sections in config.example.toml
+- [X] T001 Create monorepo packages/ directory structure with all subdirectories and __init__.py files per plan.md project structure
+- [X] T002 Initialize nexus-common package with pyproject.toml (pydantic>=2.0, pydantic-settings, redis[hiredis]>=5.0 dependencies) in packages/nexus-common/pyproject.toml
+- [X] T003 [P] Initialize nexus-ingestion package with pyproject.toml (ccxt>=4.0, asyncpg, aiohttp, feedparser, fastapi, uvicorn, uvloop + dev: pytest, pytest-asyncio, hypothesis, testcontainers, syrupy) in packages/nexus-ingestion/pyproject.toml
+- [X] T004 [P] Create Docker Compose dev profile with Redis 7 (port 6379) and TimescaleDB (port 5432) services in docker-compose.dev.yml
+- [X] T005 [P] Create example configuration with exchange, redis, timescaledb, news, and monitoring sections in config.example.toml
 
 ---
 
@@ -38,17 +38,17 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T006 Implement EventType, AdapterStatus, Severity enums per data-model.md in packages/nexus-common/nexus_common/schemas/enums.py
-- [ ] T007 [P] Implement MarketEvent envelope + Tick, OrderBookUpdate, Trade, Candle, NewsArticle Pydantic models with validation rules (price positivity, orderbook ordering, schema_version semver) in packages/nexus-common/nexus_common/schemas/market_event.py
-- [ ] T008 [P] Implement HealthAlert + AdapterHealth Pydantic models per data-model.md in packages/nexus-common/nexus_common/schemas/health_alert.py
-- [ ] T009 [P] Implement shared config base with pydantic-settings (BaseSettings, TOML source, env prefix NEXUS_, SecretStr for credentials per SRC-003) in packages/nexus-common/nexus_common/config.py
-- [ ] T010 [P] Implement async Redis connection factory with retry_on_timeout and ExponentialBackoff(retries=3) in packages/nexus-common/nexus_common/redis_client.py
-- [ ] T011 Implement ingestion-specific config (exchange list, subscribed assets, polling intervals, persistence batch settings, gap detector thresholds) in packages/nexus-ingestion/nexus_ingestion/config.py
-- [ ] T012 Implement BaseAdapter ABC with async connect, subscribe, run loop, stop, AdapterStatus state tracking, and AdapterHealth property in packages/nexus-ingestion/nexus_ingestion/adapters/base.py
-- [ ] T013 [P] Implement async Redis Stream publisher with per-event XADD, in-memory buffer on disconnect (configurable max size), pipeline flush on reconnect, MAXLEN ~100000 approximate trimming in packages/nexus-ingestion/nexus_ingestion/publishers/redis_publisher.py
-- [ ] T014 [P] Implement health alert publisher for nexus:ingestion-health-events stream with MAXLEN ~5000 approximate trimming in packages/nexus-ingestion/nexus_ingestion/publishers/health_publisher.py
-- [ ] T015 Implement IngestionService orchestrator with manual asyncio.create_task per adapter, add_done_callback for failure detection, call_later for restart backoff (NO TaskGroup per research.md decision) in packages/nexus-ingestion/nexus_ingestion/service.py
-- [ ] T016 Implement asyncio entry point with uvloop event loop policy, SIGTERM/SIGINT signal handlers, graceful shutdown sequence in packages/nexus-ingestion/nexus_ingestion/main.py
+- [X] T006 Implement EventType, AdapterStatus, Severity enums per data-model.md in packages/nexus-common/nexus_common/schemas/enums.py
+- [X] T007 [P] Implement MarketEvent envelope + Tick, OrderBookUpdate, Trade, Candle, NewsArticle Pydantic models with validation rules (price positivity, orderbook ordering, schema_version semver) in packages/nexus-common/nexus_common/schemas/market_event.py
+- [X] T008 [P] Implement HealthAlert + AdapterHealth Pydantic models per data-model.md in packages/nexus-common/nexus_common/schemas/health_alert.py
+- [X] T009 [P] Implement shared config base with pydantic-settings (BaseSettings, TOML source, env prefix NEXUS_, SecretStr for credentials per SRC-003) in packages/nexus-common/nexus_common/config.py
+- [X] T010 [P] Implement async Redis connection factory with retry_on_timeout and ExponentialBackoff(retries=3) in packages/nexus-common/nexus_common/redis_client.py
+- [X] T011 Implement ingestion-specific config (exchange list, subscribed assets, polling intervals, persistence batch settings, gap detector thresholds) in packages/nexus-ingestion/nexus_ingestion/config.py
+- [X] T012 Implement BaseAdapter ABC with async connect, subscribe, run loop, stop, AdapterStatus state tracking, and AdapterHealth property in packages/nexus-ingestion/nexus_ingestion/adapters/base.py
+- [X] T013 [P] Implement async Redis Stream publisher with per-event XADD, in-memory buffer on disconnect (configurable max size), pipeline flush on reconnect, MAXLEN ~100000 approximate trimming in packages/nexus-ingestion/nexus_ingestion/publishers/redis_publisher.py
+- [X] T014 [P] Implement health alert publisher for nexus:ingestion-health-events stream with MAXLEN ~5000 approximate trimming in packages/nexus-ingestion/nexus_ingestion/publishers/health_publisher.py
+- [X] T015 Implement IngestionService orchestrator with manual asyncio.create_task per adapter, add_done_callback for failure detection, call_later for restart backoff (NO TaskGroup per research.md decision) in packages/nexus-ingestion/nexus_ingestion/service.py
+- [X] T016 Implement asyncio entry point with uvloop event loop policy, SIGTERM/SIGINT signal handlers, graceful shutdown sequence in packages/nexus-ingestion/nexus_ingestion/main.py
 
 **Checkpoint**: Foundation ready — user story implementation can now begin in parallel
 
@@ -64,27 +64,27 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T017 [P] [US1] Property-based schema tests (Hypothesis): validate MarketEvent + all payload types respect constraints (price > 0, orderbook ordering, semver schema_version), verify credential exclusion in serialized output (SRC-003) in packages/nexus-common/tests/unit/test_schemas.py
-- [ ] T018 [P] [US1] Contract snapshot tests (syrupy): verify Redis serialization format for Tick, OrderBookUpdate, Trade, Candle event types matches contracts/market-events.md in packages/nexus-ingestion/tests/contract/test_event_schemas.py
+- [X] T017 [P] [US1] Property-based schema tests (Hypothesis): validate MarketEvent + all payload types respect constraints (price > 0, orderbook ordering, semver schema_version), verify credential exclusion in serialized output (SRC-003) in packages/nexus-common/tests/unit/test_schemas.py
+- [X] T018 [P] [US1] Contract snapshot tests (syrupy): verify Redis serialization format for Tick, OrderBookUpdate, Trade, Candle event types matches contracts/market-events.md in packages/nexus-ingestion/tests/contract/test_event_schemas.py
 
 ### Implementation for US1
 
-- [ ] T019 [US1] Implement ExchangeAdapter with ccxt.pro WebSocket (watch_ticker → Tick, watch_order_book → OrderBookUpdate, watch_trades → Trade, watch_ohlcv → Candle normalization, sandbox mode toggle, malformed event drop with counter per FR-009, timestamp tolerance check — reject events outside configurable window per data-model.md validation rule #1) in packages/nexus-ingestion/nexus_ingestion/adapters/exchange_adapter.py
-- [ ] T020 [P] [US1] Create TimescaleDB schema SQL (market_events hypertable with time column, health_alerts hypertable, composite index on asset+event_type+time per data-model.md) in packages/nexus-ingestion/nexus_ingestion/persistence/schema.sql
-- [ ] T021 [US1] Implement async TimescaleDB batch writer with asyncpg (copy_records_to_table via COPY protocol, asyncio.Queue maxsize=50000, flush on 500 records or 5s interval, put_nowait with QueueFull drop-and-warn, exponential backoff on connection failure, emit PERSISTENCE_ERROR MEDIUM-severity health alert via health publisher on write failure per contracts/health-events.md) in packages/nexus-ingestion/nexus_ingestion/persistence/timescale_writer.py
-- [ ] T022 [P] [US1] Implement data gap detector with per-asset last-event timers, configurable threshold window, DATA_GAP HIGH-severity health alert emission per SRC-002, MALFORMED_SPIKE LOW-severity alert when per-adapter malformed event rate exceeds configurable threshold per contracts/health-events.md in packages/nexus-ingestion/nexus_ingestion/monitoring/gap_detector.py
-- [ ] T023 [P] [US1] Implement FastAPI health endpoint (GET /health returning overall status + per-adapter AdapterHealth array, <200ms response target, uvicorn.Server.serve() as asyncio task, shared state via app.state) in packages/nexus-ingestion/nexus_ingestion/monitoring/health_endpoint.py
-- [ ] T024 [US1] Wire IngestionService for US1: register ExchangeAdapter, connect RedisPublisher + TimescaleWriter + GapDetector + HealthEndpoint, implement event routing (adapter → publisher + writer + gap detector) in packages/nexus-ingestion/nexus_ingestion/service.py
+- [X] T019 [US1] Implement ExchangeAdapter with ccxt.pro WebSocket (watch_ticker → Tick, watch_order_book → OrderBookUpdate, watch_trades → Trade, watch_ohlcv → Candle normalization, sandbox mode toggle, malformed event drop with counter per FR-009, timestamp tolerance check — reject events outside configurable window per data-model.md validation rule #1) in packages/nexus-ingestion/nexus_ingestion/adapters/exchange_adapter.py
+- [X] T020 [P] [US1] Create TimescaleDB schema SQL (market_events hypertable with time column, health_alerts hypertable, composite index on asset+event_type+time per data-model.md) in packages/nexus-ingestion/nexus_ingestion/persistence/schema.sql
+- [X] T021 [US1] Implement async TimescaleDB batch writer with asyncpg (copy_records_to_table via COPY protocol, asyncio.Queue maxsize=50000, flush on 500 records or 5s interval, put_nowait with QueueFull drop-and-warn, exponential backoff on connection failure, emit PERSISTENCE_ERROR MEDIUM-severity health alert via health publisher on write failure per contracts/health-events.md) in packages/nexus-ingestion/nexus_ingestion/persistence/timescale_writer.py
+- [X] T022 [P] [US1] Implement data gap detector with per-asset last-event timers, configurable threshold window, DATA_GAP HIGH-severity health alert emission per SRC-002, MALFORMED_SPIKE LOW-severity alert when per-adapter malformed event rate exceeds configurable threshold per contracts/health-events.md in packages/nexus-ingestion/nexus_ingestion/monitoring/gap_detector.py
+- [X] T023 [P] [US1] Implement FastAPI health endpoint (GET /health returning overall status + per-adapter AdapterHealth array, <200ms response target, uvicorn.Server.serve() as asyncio task, shared state via app.state) in packages/nexus-ingestion/nexus_ingestion/monitoring/health_endpoint.py
+- [X] T024 [US1] Wire IngestionService for US1: register ExchangeAdapter, connect RedisPublisher + TimescaleWriter + GapDetector + HealthEndpoint, implement event routing (adapter → publisher + writer + gap detector) in packages/nexus-ingestion/nexus_ingestion/service.py
 
 ### Verification Tests for US1
 
-- [ ] T025 [P] [US1] Unit test for ExchangeAdapter: mock ccxt.pro exchange, verify Tick/OrderBookUpdate/Trade/Candle normalization, assert read-only access (SRC-001: no create_order/cancel_order calls), verify malformed payload handling in packages/nexus-ingestion/tests/unit/test_exchange_adapter.py
-- [ ] T026 [P] [US1] Unit test for TimescaleDB writer: queue behavior, batch flush on size and timer, error retry with backoff, QueueFull drop behavior in packages/nexus-ingestion/tests/unit/test_timescale_writer.py
-- [ ] T027 [P] [US1] Unit test for gap detector: threshold triggering, DATA_GAP alert emission, timer reset on event receipt, multi-asset independence in packages/nexus-ingestion/tests/unit/test_gap_detector.py
-- [ ] T028 [US1] Integration test for Redis Stream: testcontainers Redis, ExchangeAdapter publishes MarketEvent, XREAD verifies correct fields and payload structure per contracts/market-events.md in packages/nexus-ingestion/tests/integration/test_redis_streams.py
-- [ ] T029 [P] [US1] Integration test for TimescaleDB persistence: testcontainers PostgreSQL/TimescaleDB, batch write via writer, verify record count and field values in market_events hypertable in packages/nexus-ingestion/tests/integration/test_timescale_persistence.py
-- [ ] T030 [P] [US1] Integration test for health endpoint: start FastAPI in-process, verify GET /health returns per-adapter status with correct fields, verify <200ms response time in packages/nexus-ingestion/tests/integration/test_health_endpoint.py
-- [ ] T030a [US1] Integration test for adapter failure isolation (SC-004): start two mock adapters, crash one (raise unhandled exception), assert the surviving adapter continues publishing events to Redis uninterrupted and its health status remains CONNECTED in packages/nexus-ingestion/tests/integration/test_redis_streams.py
+- [X] T025 [P] [US1] Unit test for ExchangeAdapter: mock ccxt.pro exchange, verify Tick/OrderBookUpdate/Trade/Candle normalization, assert read-only access (SRC-001: no create_order/cancel_order calls), verify malformed payload handling in packages/nexus-ingestion/tests/unit/test_exchange_adapter.py
+- [X] T026 [P] [US1] Unit test for TimescaleDB writer: queue behavior, batch flush on size and timer, error retry with backoff, QueueFull drop behavior in packages/nexus-ingestion/tests/unit/test_timescale_writer.py
+- [X] T027 [P] [US1] Unit test for gap detector: threshold triggering, DATA_GAP alert emission, timer reset on event receipt, multi-asset independence in packages/nexus-ingestion/tests/unit/test_gap_detector.py
+- [X] T028 [US1] Integration test for Redis Stream: testcontainers Redis, ExchangeAdapter publishes MarketEvent, XREAD verifies correct fields and payload structure per contracts/market-events.md in packages/nexus-ingestion/tests/integration/test_redis_streams.py
+- [X] T029 [P] [US1] Integration test for TimescaleDB persistence: testcontainers PostgreSQL/TimescaleDB, batch write via writer, verify record count and field values in market_events hypertable in packages/nexus-ingestion/tests/integration/test_timescale_persistence.py
+- [X] T030 [P] [US1] Integration test for health endpoint: start FastAPI in-process, verify GET /health returns per-adapter status with correct fields, verify <200ms response time in packages/nexus-ingestion/tests/integration/test_health_endpoint.py
+- [X] T030a [US1] Integration test for adapter failure isolation (SC-004): start two mock adapters, crash one (raise unhandled exception), assert the surviving adapter continues publishing events to Redis uninterrupted and its health status remains CONNECTED in packages/nexus-ingestion/tests/integration/test_redis_streams.py
 
 **Checkpoint**: User Story 1 (MVP) is fully functional — exchange data flows through Redis, persists to TimescaleDB, /health reports adapter status, gap detector monitors data freshness
 
@@ -100,16 +100,16 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T031 [P] [US2] Unit tests for reconnection: adapter state transitions (CONNECTED→RECONNECTING→DOWN→CONNECTED), exponential backoff timing, health alert emission (ADAPTER_RECONNECTING, ADAPTER_DOWN, ADAPTER_RECOVERED) on each transition in packages/nexus-ingestion/tests/unit/test_exchange_adapter.py
+- [X] T031 [P] [US2] Unit tests for reconnection: adapter state transitions (CONNECTED→RECONNECTING→DOWN→CONNECTED), exponential backoff timing, health alert emission (ADAPTER_RECONNECTING, ADAPTER_DOWN, ADAPTER_RECOVERED) on each transition in packages/nexus-ingestion/tests/unit/test_exchange_adapter.py
 
 ### Implementation for US2
 
-- [ ] T032 [US2] Add reconnection state tracking and error handling to ExchangeAdapter watch loop: catch NetworkError/ExchangeNotAvailable, update AdapterStatus, emit ADAPTER_RECONNECTING/ADAPTER_DOWN/ADAPTER_RECOVERED health alerts, continue retry loop after max attempts (never crash) in packages/nexus-ingestion/nexus_ingestion/adapters/exchange_adapter.py
-- [ ] T033 [US2] Enhance IngestionService supervisor with configurable max restart attempts and exponential restart backoff for crashed adapter tasks in packages/nexus-ingestion/nexus_ingestion/service.py
+- [X] T032 [US2] Add reconnection state tracking and error handling to ExchangeAdapter watch loop: catch NetworkError/ExchangeNotAvailable, update AdapterStatus, emit ADAPTER_RECONNECTING/ADAPTER_DOWN/ADAPTER_RECOVERED health alerts, continue retry loop after max attempts (never crash) in packages/nexus-ingestion/nexus_ingestion/adapters/exchange_adapter.py
+- [X] T033 [US2] Enhance IngestionService supervisor with configurable max restart attempts and exponential restart backoff for crashed adapter tasks in packages/nexus-ingestion/nexus_ingestion/service.py
 
 ### Verification Tests for US2
 
-- [ ] T034 [US2] Integration test for reconnection recovery: simulate exchange disconnect (mock), verify adapter reconnects and resumes publishing to Redis within timeout, verify health alert sequence in nexus:ingestion-health-events stream in packages/nexus-ingestion/tests/integration/test_redis_streams.py
+- [X] T034 [US2] Integration test for reconnection recovery: simulate exchange disconnect (mock), verify adapter reconnects and resumes publishing to Redis within timeout, verify health alert sequence in nexus:ingestion-health-events stream in packages/nexus-ingestion/tests/integration/test_redis_streams.py
 
 **Checkpoint**: User Stories 1 AND 2 both work independently — exchange data flows with automatic recovery from disconnections
 
@@ -125,16 +125,16 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T035 [P] [US3] Contract snapshot tests (syrupy): verify NewsArticle event Redis serialization format matches contracts/news-events.md in packages/nexus-ingestion/tests/contract/test_event_schemas.py
+- [X] T035 [P] [US3] Contract snapshot tests (syrupy): verify NewsArticle event Redis serialization format matches contracts/news-events.md in packages/nexus-ingestion/tests/contract/test_event_schemas.py
 
 ### Implementation for US3
 
-- [ ] T036 [US3] Implement NewsAdapter with aiohttp.ClientSession for async HTTP fetch, feedparser.parse via asyncio.to_thread for RSS XML parsing, configurable polling interval with asyncio.sleep, article dedup by URL, NEWS_SOURCE_DOWN health alert on fetch failure in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
-- [ ] T037 [US3] Wire NewsAdapter into IngestionService: register as supervised task alongside exchange adapters, configure nexus:news-events stream with MAXLEN ~10000, route NewsArticle events to RedisPublisher + TimescaleWriter in packages/nexus-ingestion/nexus_ingestion/service.py
+- [X] T036 [US3] Implement NewsAdapter with aiohttp.ClientSession for async HTTP fetch, feedparser.parse via asyncio.to_thread for RSS XML parsing, configurable polling interval with asyncio.sleep, article dedup by URL, NEWS_SOURCE_DOWN health alert on fetch failure in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
+- [X] T037 [US3] Wire NewsAdapter into IngestionService: register as supervised task alongside exchange adapters, configure nexus:news-events stream with MAXLEN ~10000, route NewsArticle events to RedisPublisher + TimescaleWriter in packages/nexus-ingestion/nexus_ingestion/service.py
 
 ### Verification Tests for US3
 
-- [ ] T038 [P] [US3] Unit test for NewsAdapter: mock aiohttp response + feedparser output, verify NewsArticle normalization (headline, body_summary, url, source_name, published_at, related_assets), test HTTP failure handling and retry, verify NEWS_SOURCE_DOWN alert emission in packages/nexus-ingestion/tests/unit/test_news_adapter.py
+- [X] T038 [P] [US3] Unit test for NewsAdapter: mock aiohttp response + feedparser output, verify NewsArticle normalization (headline, body_summary, url, source_name, published_at, related_assets), test HTTP failure handling and retry, verify NEWS_SOURCE_DOWN alert emission in packages/nexus-ingestion/tests/unit/test_news_adapter.py
 
 **Checkpoint**: All three user stories functional — exchange data, reconnection resilience, and news articles all flowing through the system
 
@@ -144,10 +144,10 @@
 
 **Purpose**: Infrastructure completeness, security verification, and end-to-end validation
 
-- [ ] T039 [P] Unit test for Redis publisher: buffer behavior on disconnect, pipeline flush on reconnect, MAXLEN configuration, verify event ordering preserved in packages/nexus-ingestion/tests/unit/test_redis_publisher.py
-- [ ] T040 [P] Create multi-stage Dockerfile for nexus-ingestion (Python 3.11-slim base, non-root user, health check CMD) in packages/nexus-ingestion/Dockerfile
-- [ ] T041 Security audit: verify SRC-001 (grep for create_order/cancel_order — must not exist in any adapter), SRC-003 (SecretStr masking in config repr, no credentials in serialized events or log output) across all modules
-- [ ] T042 Run quickstart.md end-to-end validation: docker compose up Redis + TimescaleDB, start ingestion service, verify MarketEvents in Redis within 5s (SC-001), check GET /health response <200ms (SC-005), verify TimescaleDB persistence within 10s (SC-003)
+- [X] T039 [P] Unit test for Redis publisher: buffer behavior on disconnect, pipeline flush on reconnect, MAXLEN configuration, verify event ordering preserved in packages/nexus-ingestion/tests/unit/test_redis_publisher.py
+- [X] T040 [P] Create multi-stage Dockerfile for nexus-ingestion (Python 3.11-slim base, non-root user, health check CMD) in packages/nexus-ingestion/Dockerfile
+- [X] T041 Security audit: verify SRC-001 (grep for create_order/cancel_order — must not exist in any adapter), SRC-003 (SecretStr masking in config repr, no credentials in serialized events or log output) across all modules
+- [X] T042 Run quickstart.md end-to-end validation: docker compose up Redis + TimescaleDB, start ingestion service, verify MarketEvents in Redis within 5s (SC-001), check GET /health response <200ms (SC-005), verify TimescaleDB persistence within 10s (SC-003)
 
 ---
 

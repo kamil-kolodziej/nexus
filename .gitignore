@@ -218,3 +218,6 @@ __marimo__/
 # Design docs
 docs/design/
 docs/plans/
+
+# Local config (may contain credentials)
+config.toml
