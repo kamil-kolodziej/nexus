@@ -77,6 +77,7 @@ async def setup_schema(dsn: str):
     conn = await asyncpg.connect(dsn)
     try:
         await conn.execute(SCHEMA_SQL)
+        await conn.execute("TRUNCATE market_events")
     finally:
         await conn.close()
 
@@ -129,7 +130,7 @@ class TestTimescaleDBPersistence:
 
         conn = await asyncpg.connect(dsn)
         try:
-            count = await conn.fetchval("SELECT COUNT(*) FROM market_events WHERE payload->>'volume_24h' >= '10'")
+            count = await conn.fetchval("SELECT COUNT(*) FROM market_events WHERE (payload->>'volume_24h')::float >= 10")
             assert count == 5
         finally:
             await conn.close()

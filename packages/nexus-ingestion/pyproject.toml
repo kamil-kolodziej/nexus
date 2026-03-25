@@ -14,6 +14,7 @@ dependencies = [
     "aiohttp>=3.9",
     "feedparser>=6.0",
     "fastapi>=0.110",
+    "tomli>=2.0; python_version < '3.11'",
     "uvicorn>=0.27",
     "uvloop>=0.19; sys_platform != 'win32'",
 ]

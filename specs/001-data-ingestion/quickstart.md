@@ -53,7 +53,15 @@ export NEXUS_EXCHANGE_API_KEY="your-testnet-api-key"
 export NEXUS_EXCHANGE_API_SECRET="your-testnet-api-secret"
 ```
 
-### 5. Run the service
+### 5. Apply database schema
+
+```bash
+docker compose -f docker-compose.dev.yml exec -T timescaledb psql -U nexus -d nexus < packages/nexus-ingestion/nexus_ingestion/persistence/schema.sql
+```
+
+This creates the `market_events` and `health_alerts` hypertables in TimescaleDB.
+
+### 6. Run the service
 
 ```bash
 python -m nexus_ingestion.main
@@ -65,7 +73,7 @@ The service will:
 3. Start publishing `MarketEvent` records to `nexus:market-events` Redis Stream
 4. Expose health endpoint at `http://localhost:8080/health`
 
-### 6. Verify events
+### 7. Verify events
 
 In another terminal, read from the Redis Stream:
 
@@ -75,7 +83,7 @@ redis-cli XREAD COUNT 5 BLOCK 5000 STREAMS nexus:market-events 0
 
 You should see events within 5 seconds of startup.
 
-### 7. Check health
+### 8. Check health
 
 ```bash
 curl http://localhost:8080/health

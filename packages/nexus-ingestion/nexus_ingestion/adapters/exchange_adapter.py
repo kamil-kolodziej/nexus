@@ -40,7 +40,7 @@ class ExchangeAdapter(BaseAdapter):
         self._api_key = api_key
         self._api_secret = api_secret
         self._sandbox = sandbox
-        self._assets = assets or ["BTC/USDT"]
+        self._assets = ["BTC/USDT"] if assets is None else assets
         self._timestamp_tolerance = timestamp_tolerance
         self._max_reconnect_attempts = max_reconnect_attempts
         self._event_callback = event_callback
