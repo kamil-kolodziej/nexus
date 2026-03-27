@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-data-ingestion`
 **Created**: 2026-03-20
-**Status**: Draft
+**Status**: Implemented
 **Input**: Data Ingestion Layer — connect to exchanges, normalize market events, publish to Redis
 
 ## Clarifications
@@ -65,15 +65,15 @@ As a strategy developer, I want news articles from external sources to flow into
 ### Edge Cases
 
 - What happens when an exchange returns a malformed or incomplete event payload?
-  → The adapter logs the raw payload, drops the event, increments a `malformed_events` counter, and continues.
+  → The adapter logs the exception, drops the event, increments the `malformed_count` counter, and continues.
 - What happens when the Redis connection is lost while the ingestion service is running?
   → The service buffers events in memory up to a configurable limit, attempts reconnection with backoff, and resumes publishing once reconnected. If the buffer overflows, oldest events are dropped and a warning is logged.
 - What happens when TimescaleDB becomes unavailable while the ingestion service is running?
   → Events continue to flow to Redis uninterrupted. The background persistence task queues write attempts and retries with backoff. Events remain in the persistence queue until TimescaleDB recovers. A health alert is emitted to `nexus:ingestion-health-events` stream. The backtesting engine may work with partial historical data if the outage persists.
 - What happens when the health alert stream (Redis) becomes unavailable?
-  → The service buffers alert messages in memory with a configurable limit. Once the stream is accessible again, buffered alerts are flushed. If the buffer overflows, oldest alerts are dropped with a local warning log. Market data (events to Redis Stream) continues uninterrupted; only alerting is delayed.
+  → Health alerts are logged locally and dropped. The health publisher does not buffer to avoid circular failure dependencies. Market data publishing continues uninterrupted.
 - What happens when system clock drift causes event timestamps to be in the future or far in the past?
-  → Events outside a configurable timestamp tolerance window are flagged, logged, and optionally dropped or corrected to server time.
+  → Events outside the configurable `timestamp_tolerance` window are logged and dropped. No server-time correction is applied.
 - What happens when the same asset is available on multiple configured exchanges?
   → Each adapter publishes independently-sourced events; consumers can filter by `source`. This is not deduplicated at the ingestion layer.
 - What happens when a new asset is added to the subscription list at runtime?
@@ -109,14 +109,14 @@ As a strategy developer, I want news articles from external sources to flow into
 
 ### Key Entities
 
-- **MarketEvent**: The normalized envelope for all data. Contains `source` (adapter name + exchange id), `asset` (unified symbol e.g. `BTC/USDT`), `timestamp` (UTC ISO-8601), `event_type` (enum), `payload` (event-type-specific data).
+- **MarketEvent**: The normalized envelope for all data. Contains `source` (adapter name + exchange id), `asset` (unified symbol e.g. `BTC/USDT`, or `None` for non-asset events such as news), `timestamp` (UTC ISO-8601), `event_type` (enum), `payload` (event-type-specific data).
 - **Tick**: Payload within a MarketEvent. Represents a single best-bid/best-ask snapshot: `bid`, `ask`, `last`, `volume_24h`.
 - **OrderBookUpdate**: Payload with `bids` and `asks` as sorted price-level arrays with quantities.
 - **Trade**: Payload for a single completed exchange transaction: `trade_id` (exchange-assigned), `price`, `amount`, `side` (`"buy"` or `"sell"`), `taker_or_maker` (optional).
 - **Candle**: OHLCV payload with `open`, `high`, `low`, `close`, `volume`, `timeframe`.
 - **NewsArticle**: Payload with `headline`, `body_summary`, `url`, `source_name`, `published_at`, `related_assets` (list, may be empty).
 - **SentimentScore**: Payload produced by the separate `nexus-sentiment` service (not ingestion). Contains `news_article_event_id` (reference to originating NewsArticle event), `score` (float, -1.0 to 1.0), `confidence` (float, 0.0 to 1.0), `model_version` (string). Published to the same Redis Stream as market events.
-- **AdapterHealth**: Per-adapter runtime status: `adapter_id`, `status` (CONNECTED / RECONNECTING / DOWN), `last_event_at`, `event_count`, `error_count`.
+- **AdapterHealth**: Per-adapter runtime status: `adapter_id`, `adapter_type`, `status` (CONNECTED / RECONNECTING / DOWN), `last_event_at`, `event_count`, `error_count`, `malformed_count`.
 
 ## Assumptions
 

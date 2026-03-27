@@ -11,7 +11,7 @@
 │                                                      │
 │  id: str (Redis Stream auto-ID)                      │
 │  source: str                                         │
-│  asset: str                                          │
+│  asset: str | None                                   │
 │  timestamp: datetime (UTC)                           │
 │  event_type: EventType                               │
 │  schema_version: str                                 │
@@ -62,7 +62,7 @@ The normalized wrapper for all ingested data. Defined in `packages/nexus-common`
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
 | `source` | `str` | Adapter name + exchange id (e.g., `"binance:exchange"`, `"newsapi:news"`) | Non-empty, format: `{exchange_or_source}:{adapter_type}` |
-| `asset` | `str` | Unified symbol (e.g., `"BTC/USDT"`) | ccxt unified symbol format; `None` allowed for news without determinable asset |
+| `asset` | `str \| None` | Unified symbol (e.g., `"BTC/USDT"`), or `None` for non-asset events (news) | ccxt unified symbol format; never empty string — use `None` |
 | `timestamp` | `datetime` | Event time in UTC (ISO-8601) | Must be within configurable tolerance of server time |
 | `event_type` | `EventType` | Discriminator enum | One of: `TICK`, `ORDER_BOOK_UPDATE`, `TRADE`, `CANDLE`, `NEWS_ARTICLE` |
 | `schema_version` | `str` | Schema version for backward compatibility | Semantic version string (e.g., `"1.0.0"`) |

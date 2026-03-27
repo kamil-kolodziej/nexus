@@ -18,7 +18,7 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `source` | string | ✓ | `"{source_name}:news"` (e.g., `"newsapi:news"`, `"coindesk-rss:news"`) |
-| `asset` | string | | Detected related asset symbol, or empty string if undetermined |
+| `asset` | string | | Empty string when no asset is associated (wire representation of `None`) |
 | `timestamp` | string | ✓ | ISO-8601 UTC (article fetch time) |
 | `event_type` | string | ✓ | Always `NEWS_ARTICLE` |
 | `schema_version` | string | ✓ | Semantic version (e.g., `"1.0.0"`) |
