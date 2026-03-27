@@ -148,6 +148,9 @@
 - [X] T040 [P] Create multi-stage Dockerfile for nexus-ingestion (Python 3.11-slim base, non-root user, health check CMD) in packages/nexus-ingestion/Dockerfile
 - [X] T041 Security audit: verify SRC-001 (grep for create_order/cancel_order — must not exist in any adapter), SRC-003 (SecretStr masking in config repr, no credentials in serialized events or log output) across all modules
 - [X] T042 Run quickstart.md end-to-end validation: docker compose up Redis + TimescaleDB, start ingestion service, verify MarketEvents in Redis within 5s (SC-001), check GET /health response <200ms (SC-005), verify TimescaleDB persistence within 10s (SC-003)
+- [X] T045 Wire `config.toml` as a pydantic-settings source in `IngestionConfig` (`settings_customise_sources` + TOML loader with section mapping for exchange, redis, timescaledb, news, monitoring, supervisor); add `tomli` fallback for Python 3.10; add `test_config.py` covering settings precedence in packages/nexus-ingestion/nexus_ingestion/config.py
+- [X] T043 [P] Fix NewsAdapter article deduplication: replace unbounded `_seen_urls: set` with `OrderedDict`-based LRU capped at 10,000 entries (oldest evicted first) to prevent unbounded memory growth in long-running deployments in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
+- [X] T044 [P] Fix NewsAdapter asset field: pass `asset=None` (not `asset=""`) for NEWS_ARTICLE events to match MarketEvent contract (asset must be `None` for non-asset events, never empty string) in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
 
 ---
 

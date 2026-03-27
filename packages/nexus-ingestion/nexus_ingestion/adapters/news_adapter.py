@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from calendar import timegm
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -43,7 +45,13 @@ class NewsAdapter(BaseAdapter):
         self._event_callback = event_callback
         self._health_callback = health_callback
         self._session: aiohttp.ClientSession | None = None
-        self._seen_urls: set[str] = set()
+        # LRU deduplication set: prevents re-emitting articles that reappear in the feed across
+        # polls. Capped at 10,000 entries (oldest evicted first) so memory stays bounded
+        # regardless of how long the service runs. An RSS feed's own retention window is
+        # typically 24-72 hours; 10k entries covers years of even a prolific feed, so in
+        # practice nothing is evicted while still live in any feed.
+        self._seen_urls: OrderedDict[str, None] = OrderedDict()
+        self._seen_urls_max = 10_000
         self._running = False
 
     async def connect(self) -> None:
@@ -108,7 +116,9 @@ class NewsAdapter(BaseAdapter):
             if not url or url in self._seen_urls:
                 continue
 
-            self._seen_urls.add(url)
+            self._seen_urls[url] = None
+            if len(self._seen_urls) > self._seen_urls_max:
+                self._seen_urls.popitem(last=False)
             event = self._normalize_entry(entry)
             if event:
                 await self._emit_event(event)
@@ -133,14 +143,13 @@ class NewsAdapter(BaseAdapter):
             # Parse published date
             published_parsed = getattr(entry, "published_parsed", None)
             if published_parsed:
-                from calendar import timegm
                 published_at = datetime.fromtimestamp(timegm(published_parsed), tz=timezone.utc)
             else:
                 published_at = datetime.now(timezone.utc)
 
             return MarketEvent(
                 source=self.adapter_id,
-                asset="",
+                asset=None,
                 timestamp=datetime.now(timezone.utc),
                 event_type=EventType.NEWS_ARTICLE,
                 payload={

@@ -77,17 +77,51 @@ class TestRSSNormalization:
         assert event is None
 
 
+def _make_rss_session(status: int = 200, body: str = "<rss/>") -> MagicMock:
+    """Return a mock aiohttp session whose get() supports `async with`."""
+    mock_resp = AsyncMock()
+    mock_resp.status = status
+    mock_resp.text = AsyncMock(return_value=body)
+    mock_session = MagicMock()
+    mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
+    return mock_session
+
+
 class TestDedup:
     @pytest.mark.asyncio
-    async def test_duplicate_url_skipped(self, adapter: NewsAdapter, events: list) -> None:
-        adapter._seen_urls.add("https://example.com/1")
-        entry = _make_rss_entry(link="https://example.com/1")
+    async def test_duplicate_url_not_emitted(self, adapter: NewsAdapter, events: list) -> None:
+        """_poll_rss must not emit the same URL twice across two polls."""
+        feed = MagicMock()
+        feed.entries = [_make_rss_entry(link="https://example.com/1")]
+        adapter._session = _make_rss_session()
 
-        # Simulate polling — the dedup check happens in _poll_rss
-        # Directly test that normalize works but dedup prevents emit
-        event = adapter._normalize_entry(entry)
-        assert event is not None  # Normalize succeeds
-        # But _poll_rss would skip it due to _seen_urls
+        with patch("nexus_ingestion.adapters.news_adapter.feedparser.parse", return_value=feed):
+            await adapter._poll_rss()
+            await adapter._poll_rss()
+
+        assert len(events) == 1  # second poll must not re-emit the same URL
+
+    @pytest.mark.asyncio
+    async def test_lru_eviction_allows_reemit_after_cap(self, adapter: NewsAdapter, events: list) -> None:
+        """Once the cap is exceeded, the oldest URL is evicted and may be re-emitted."""
+        adapter._seen_urls_max = 2
+
+        # Fill to cap with two different URLs
+        adapter._seen_urls["https://example.com/old1"] = None
+        adapter._seen_urls["https://example.com/old2"] = None
+
+        # A third entry triggers eviction of old1 (oldest)
+        feed = MagicMock()
+        feed.entries = [_make_rss_entry(link="https://example.com/new")]
+        adapter._session = _make_rss_session()
+
+        with patch("nexus_ingestion.adapters.news_adapter.feedparser.parse", return_value=feed):
+            await adapter._poll_rss()
+
+        assert len(adapter._seen_urls) == 2
+        assert "https://example.com/old1" not in adapter._seen_urls
+        assert "https://example.com/new" in adapter._seen_urls
 
 
 class TestHTTPFailureHandling:
