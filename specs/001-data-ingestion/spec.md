@@ -42,7 +42,7 @@ As the platform operator, I want the ingestion service to automatically recover 
 **Acceptance Scenarios**:
 
 1. **Given** the ingestion service is connected to an exchange, **When** the WebSocket connection drops, **Then** the service detects the disconnect within 5 seconds and begins reconnection attempts with exponential backoff.
-2. **Given** the service is reconnecting, **When** the connection is restored, **Then** normal event publishing resumes automatically and a reconnection event is logged.
+2. **Given** the service is reconnecting, **When** the connection is restored, **Then** normal event publishing resumes automatically, a reconnection event is logged, and the restart counter for that adapter is reset to zero.
 3. **Given** repeated disconnections occur, **When** the service cannot reconnect after the configured max attempts, **Then** it emits a health alert and continues retrying rather than crashing.
 
 ---
@@ -85,7 +85,7 @@ As a strategy developer, I want news articles from external sources to flow into
 
 - **FR-001**: The ingestion service MUST connect to at least one exchange (Binance) and continuously publish `Tick`, `OrderBookUpdate`, `Trade`, and `Candle` events to a Redis Stream.
 - **FR-002**: All events MUST be normalized into the shared `MarketEvent` schema with fields: `source`, `asset`, `timestamp`, `event_type`, `payload`.
-- **FR-003**: The service MUST automatically reconnect to exchanges after WebSocket disconnection using exponential backoff without requiring a manual restart.
+- **FR-003**: The service MUST automatically reconnect to exchanges after WebSocket disconnection using exponential backoff without requiring a manual restart. Before each restart attempt the adapter MUST be stopped to release connections and reset internal state.
 - **FR-004**: Each adapter MUST run as an independent async task so that one adapter failing or disconnecting does not affect others.
 - **FR-005**: The service MUST expose a health endpoint reporting per-adapter status: connection state, last event timestamp, and event count.
 - **FR-006**: News adapters MUST fetch from at least one configurable source (RSS or NewsAPI) on a configurable polling interval and publish `NewsArticle` events to the Redis Stream.

@@ -35,6 +35,7 @@ class IngestionService:
         self._adapters: dict[str, BaseAdapter] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._restart_counts: dict[str, int] = {}
+        self._restart_handles: dict[str, asyncio.TimerHandle] = {}
         self._running = False
         self._event_callback: Callable[[Any], Any] | None = None
 
@@ -158,14 +159,17 @@ class IngestionService:
         if not self._running:
             return
 
-        exc = task.exception() if not task.cancelled() else None
+        if task.cancelled():
+            logger.info("Adapter %s was cancelled", adapter_id)
+            return
+
+        exc = task.exception()
         if exc is not None:
-            logger.error(
-                "Adapter %s failed: %s", adapter_id, exc, exc_info=exc
-            )
+            logger.error("Adapter %s failed: %s", adapter_id, exc, exc_info=exc)
             self._schedule_restart(adapter_id)
         else:
             logger.info("Adapter %s completed normally", adapter_id)
+            self._restart_counts[adapter_id] = 0
 
     def _schedule_restart(self, adapter_id: str) -> None:
         """Schedule adapter restart with exponential backoff."""
@@ -193,19 +197,35 @@ class IngestionService:
         )
 
         loop = asyncio.get_running_loop()
-        loop.call_later(delay, self._restart_adapter, adapter_id)
+        handle = loop.call_later(delay, self._restart_adapter, adapter_id)
+        self._restart_handles[adapter_id] = handle
 
     def _restart_adapter(self, adapter_id: str) -> None:
-        """Restart a failed adapter."""
+        """Sync entry point called by call_later; hands off to async restart."""
+        self._restart_handles.pop(adapter_id, None)
         adapter = self._adapters.get(adapter_id)
         if adapter and self._running:
-            logger.info("Restarting adapter %s", adapter_id)
+            asyncio.ensure_future(self._restart_adapter_async(adapter_id, adapter))
+
+    async def _restart_adapter_async(self, adapter_id: str, adapter: BaseAdapter) -> None:
+        """Clean up the adapter then start a fresh task."""
+        logger.info("Restarting adapter %s", adapter_id)
+        try:
+            await adapter.stop()
+        except Exception:
+            logger.warning("Error stopping adapter %s before restart", adapter_id, exc_info=True)
+        if self._running:
             self._start_adapter_task(adapter_id, adapter)
 
     async def stop(self) -> None:
         """Gracefully shut down all adapter tasks and supporting components."""
         self._running = False
         logger.info("Stopping IngestionService...")
+
+        # Cancel any pending restart timers
+        for handle in self._restart_handles.values():
+            handle.cancel()
+        self._restart_handles.clear()
 
         # Stop all adapters
         for adapter in self._adapters.values():

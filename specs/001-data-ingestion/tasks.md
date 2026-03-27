@@ -151,6 +151,8 @@
 - [X] T045 Wire `config.toml` as a pydantic-settings source in `IngestionConfig` (`settings_customise_sources` + TOML loader with section mapping for exchange, redis, timescaledb, news, monitoring, supervisor); add `tomli` fallback for Python 3.10; add `test_config.py` covering settings precedence in packages/nexus-ingestion/nexus_ingestion/config.py
 - [X] T043 [P] Fix NewsAdapter article deduplication: replace unbounded `_seen_urls: set` with `OrderedDict`-based LRU capped at 10,000 entries (oldest evicted first) to prevent unbounded memory growth in long-running deployments in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
 - [X] T044 [P] Fix NewsAdapter asset field: pass `asset=None` (not `asset=""`) for NEWS_ARTICLE events to match MarketEvent contract (asset must be `None` for non-asset events, never empty string) in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
+- [X] T046 [P] Harden IngestionService adapter restart path: store `call_later` handle for explicit cancellation on shutdown; call `adapter.stop()` before restarting to ensure clean state; reset restart count on normal adapter completion; fix cancelled-task log in `_on_adapter_done` in packages/nexus-ingestion/nexus_ingestion/service.py
+- [X] T047 [P] Unit tests for IngestionService: restart handle cancelled on stop, adapter.stop() called before restart, restart count resets on normal completion, max restart attempts respected, cancelled task does not restart, NEWS_ARTICLE routed to news publisher in packages/nexus-ingestion/tests/unit/test_service.py
 
 ---
 
