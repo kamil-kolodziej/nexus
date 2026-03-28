@@ -59,6 +59,7 @@ class IngestionConfig(BaseSettings):
     news_sources: list[NewsSourceConfig] = Field(default_factory=list)
 
     # Monitoring
+    health_host: str = "127.0.0.1"
     health_port: int = 8080
     gap_threshold: int = 60
     timestamp_tolerance: int = 60

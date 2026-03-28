@@ -73,7 +73,7 @@ async def run() -> None:
     service.set_gap_detector(gap_detector)
 
     # Create health endpoint
-    health_endpoint = HealthEndpoint(port=config.health_port)
+    health_endpoint = HealthEndpoint(port=config.health_port, host=config.health_host)
     service.set_health_endpoint(health_endpoint)
 
     # Create and register exchange adapter

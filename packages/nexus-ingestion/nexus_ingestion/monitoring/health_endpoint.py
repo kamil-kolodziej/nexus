@@ -37,8 +37,9 @@ def create_health_app() -> FastAPI:
 class HealthEndpoint:
     """Runs the FastAPI health endpoint as an asyncio task."""
 
-    def __init__(self, port: int = 8080) -> None:
+    def __init__(self, port: int = 8080, host: str = "127.0.0.1") -> None:
         self._port = port
+        self._host = host
         self._app = create_health_app()
         self._server: uvicorn.Server | None = None
         self._task: asyncio.Task | None = None
@@ -55,7 +56,7 @@ class HealthEndpoint:
         """Start the uvicorn server as an asyncio task."""
         config = uvicorn.Config(
             self._app,
-            host="0.0.0.0",
+            host=self._host,
             port=self._port,
             log_level="warning",
         )
