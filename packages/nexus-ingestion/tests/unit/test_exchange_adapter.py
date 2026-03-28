@@ -7,6 +7,7 @@ read-only access (SRC-001), and malformed payload handling.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -104,7 +105,6 @@ class TestReadOnlyAccess:
     """SRC-001: Verify no exchange write operations."""
 
     def test_no_create_order_calls(self) -> None:
-        import inspect
         from nexus_ingestion.adapters import exchange_adapter
 
         source = inspect.getsource(exchange_adapter)

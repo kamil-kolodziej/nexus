@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from typing import Literal
@@ -156,8 +157,6 @@ class MarketEvent(BaseModel):
 
     def to_redis_fields(self) -> dict[str, str]:
         """Serialize to flat key-value map for Redis Stream XADD."""
-        import json
-
         return {
             "source": self.source,
             "asset": self.asset or "",
@@ -170,8 +169,6 @@ class MarketEvent(BaseModel):
     @classmethod
     def from_redis_fields(cls, fields: dict[str, str]) -> MarketEvent:
         """Deserialize from Redis Stream entry fields."""
-        import json
-
         return cls(
             source=fields["source"],
             asset=fields["asset"] or None,

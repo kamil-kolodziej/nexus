@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 import asyncpg
@@ -174,8 +175,6 @@ class TimescaleWriter:
         """Emit a PERSISTENCE_ERROR health alert."""
         if not self._health_callback:
             return
-
-        from datetime import datetime, timezone
 
         alert = HealthAlert(
             alert_type="PERSISTENCE_ERROR",
