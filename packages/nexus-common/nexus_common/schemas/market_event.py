@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+_URL_RE = re.compile(r"^https?://\S+", re.IGNORECASE)
+
 from nexus_common.schemas.enums import EventType
 
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -107,6 +109,14 @@ class NewsArticle(BaseModel):
     source_name: str = Field(min_length=1)
     published_at: datetime
     related_assets: list[str] = Field(default_factory=list)
+
+    @field_validator("url")
+    @classmethod
+    def valid_url(cls, v: str) -> str:
+        if not _URL_RE.match(v):
+            msg = f"url must start with http:// or https://, got '{v}'"
+            raise ValueError(msg)
+        return v
 
 
 # Map from EventType to payload class

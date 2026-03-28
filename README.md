@@ -36,7 +36,7 @@ Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per s
 | Package | Role |
 |---|---|
 | `nexus-common` | Shared types: `MarketEvent`, `Signal`, `TradeIntent`, serialization |
-| `nexus-ingestion` | Data source adapters — exchanges (ccxt), news, sentiment, on-chain, fundamentals |
+| `nexus-ingestion` | Data source adapters: exchanges (ccxt.pro WebSocket) and news (RSS). Publishes `MarketEvent` and `NewsArticle` events to Redis Streams |
 | `nexus-strategies` | Strategy interface, built-in strategies, Strategy Manager with hot-reload |
 | `nexus-aggregator` | Signal aggregation + probability loop (NumPy), emits `TradeIntent` |
 | `nexus-risk` | 5-layer risk validation, progressive state machine |

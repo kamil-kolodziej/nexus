@@ -89,10 +89,10 @@ class ExchangeAdapter(BaseAdapter):
         self._running = True
         tasks = []
         for asset in self._assets:
-            tasks.append(asyncio.create_task(self._watch_ticker(asset)))
-            tasks.append(asyncio.create_task(self._watch_order_book(asset)))
-            tasks.append(asyncio.create_task(self._watch_trades(asset)))
-            tasks.append(asyncio.create_task(self._watch_ohlcv(asset)))
+            tasks.append(asyncio.create_task(self._watch_ticker(asset), name=f"watch_ticker:{asset}"))
+            tasks.append(asyncio.create_task(self._watch_order_book(asset), name=f"watch_order_book:{asset}"))
+            tasks.append(asyncio.create_task(self._watch_trades(asset), name=f"watch_trades:{asset}"))
+            tasks.append(asyncio.create_task(self._watch_ohlcv(asset), name=f"watch_ohlcv:{asset}"))
 
         if tasks:
             await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
@@ -362,6 +362,8 @@ class ExchangeAdapter(BaseAdapter):
 
     async def _check_and_transition_to_down(self, attempts: int) -> None:
         """Transition to DOWN if max reconnect attempts exhausted."""
+        if self.status == AdapterStatus.DOWN:
+            return
         if attempts >= self._max_reconnect_attempts:
             self.status = AdapterStatus.DOWN
             if self._health_callback:

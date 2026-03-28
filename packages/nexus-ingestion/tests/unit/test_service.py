@@ -266,6 +266,27 @@ class TestEnqueueFullEmitsHealthAlert:
         health_pub.publish.assert_not_awaited()
 
 
+class TestRestartTaskCancelledOnStop:
+    async def test_in_flight_restart_task_cancelled_by_stop(self) -> None:
+        """stop() must cancel a restart task tracked in _restart_tasks."""
+        service = IngestionService(_make_config())
+
+        # Directly inject a long-running task as if a restart is in-flight
+        sentinel = asyncio.Event()
+
+        async def long_restart() -> None:
+            await sentinel.wait()
+
+        task = asyncio.create_task(long_restart(), name="restart:test:exchange")
+        service._restart_tasks["test:exchange"] = task
+
+        # stop() has no adapters registered, so it won't block on adapter.stop()
+        await service.stop()
+
+        assert task.done()
+        assert task.cancelled()
+
+
 class TestRestartTaskExceptionLogged:
     async def test_on_restart_done_logs_exception(self) -> None:
         """_on_restart_done must log errors that escape _restart_adapter_async."""

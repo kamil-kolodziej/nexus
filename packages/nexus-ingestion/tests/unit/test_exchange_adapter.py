@@ -294,6 +294,30 @@ class TestReconnectionStateTransitions:
         assert adapter._stream_reconnect_attempts["watch_order_book:BTC/USDT"] == 2
 
 
+class TestAdapterDownFloodGuard:
+    @pytest.mark.asyncio
+    async def test_adapter_down_emitted_once_not_again_when_already_down(self) -> None:
+        """ADAPTER_DOWN must fire only on RECONNECTING→DOWN; silent when already DOWN."""
+        alerts: list = []
+        adapter = ExchangeAdapter(
+            "binance",
+            sandbox=True,
+            max_reconnect_attempts=1,
+            health_callback=lambda a: alerts.append(a),
+        )
+        adapter.status = AdapterStatus.RECONNECTING
+
+        # First call: RECONNECTING → DOWN, alert emitted
+        await adapter._check_and_transition_to_down(1)
+        assert adapter.status == AdapterStatus.DOWN
+        assert len([a for a in alerts if a.alert_type == "ADAPTER_DOWN"]) == 1
+
+        # Subsequent calls while already DOWN: silent
+        await adapter._check_and_transition_to_down(2)
+        await adapter._check_and_transition_to_down(3)
+        assert len([a for a in alerts if a.alert_type == "ADAPTER_DOWN"]) == 1
+
+
 class TestOrderBookTimestamp:
     def test_missing_timestamp_returns_none(self, adapter: ExchangeAdapter) -> None:
         ob = {"bids": [[67234.50, 1.5]], "asks": [[67235.10, 0.8]], "timestamp": None}

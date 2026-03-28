@@ -267,3 +267,24 @@ class TestNewsArticleProperties:
         )
         assert article.headline == "Bitcoin Surges"
         assert article.related_assets == ["BTC/USDT"]
+
+    def test_invalid_url_raises_validation_error(self) -> None:
+        """url must start with http:// or https:// — bare strings rejected."""
+        with pytest.raises(ValueError):
+            NewsArticle(
+                headline="Test",
+                body_summary="",
+                url="not-a-url",
+                source_name="test",
+                published_at=datetime.now(timezone.utc),
+            )
+
+    def test_http_url_accepted(self) -> None:
+        article = NewsArticle(
+            headline="Test",
+            body_summary="",
+            url="http://example.com/article",
+            source_name="test",
+            published_at=datetime.now(timezone.utc),
+        )
+        assert article.url == "http://example.com/article"

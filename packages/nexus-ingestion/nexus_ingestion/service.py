@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
 
+from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
 
@@ -37,6 +38,7 @@ class IngestionService:
         self._tasks: dict[str, asyncio.Task] = {}
         self._restart_counts: dict[str, int] = {}
         self._restart_handles: dict[str, asyncio.TimerHandle] = {}
+        self._restart_tasks: dict[str, asyncio.Task] = {}
         self._running = False
         self._event_callback: Callable[[Any], Any] | None = None
 
@@ -91,8 +93,6 @@ class IngestionService:
 
     async def handle_event(self, event: MarketEvent) -> None:
         """Route an event to all consumers: publisher, writer, gap detector."""
-        from nexus_common.schemas.enums import EventType, Severity
-
         # Publish to appropriate Redis stream
         if event.event_type == EventType.NEWS_ARTICLE:
             if self._news_publisher:
@@ -226,12 +226,14 @@ class IngestionService:
                 self._restart_adapter_async(adapter_id, adapter),
                 name=f"restart:{adapter_id}",
             )
+            self._restart_tasks[adapter_id] = task
             task.add_done_callback(
                 lambda t, aid=adapter_id: self._on_restart_done(aid, t)
             )
 
     def _on_restart_done(self, adapter_id: str, task: asyncio.Task) -> None:
         """Log any exception that escapes the restart coroutine."""
+        self._restart_tasks.pop(adapter_id, None)
         if task.cancelled():
             return
         exc = task.exception()
@@ -262,6 +264,14 @@ class IngestionService:
         for handle in self._restart_handles.values():
             handle.cancel()
         self._restart_handles.clear()
+
+        # Cancel any in-flight restart tasks
+        for task in self._restart_tasks.values():
+            if not task.done():
+                task.cancel()
+        if self._restart_tasks:
+            await asyncio.gather(*self._restart_tasks.values(), return_exceptions=True)
+        self._restart_tasks.clear()
 
         # Stop all adapters
         for adapter in self._adapters.values():

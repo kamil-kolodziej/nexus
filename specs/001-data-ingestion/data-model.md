@@ -215,7 +215,8 @@ INIT ──→ CONNECTED ──→ (receiving events)
 | TimescaleDB write failure | `PERSISTENCE_ERROR` | MEDIUM | Background writer retry |
 | TimescaleDB queue full (event dropped by service) | `PERSISTENCE_ERROR` | MEDIUM | `IngestionService.handle_event` enqueue returns `False` |
 | Malformed event rate > threshold | `MALFORMED_SPIKE` | LOW | Counter exceeds configured rate |
-| News source unreachable | `NEWS_SOURCE_DOWN` | LOW | HTTP fetch failure |
+| News source unreachable (first failure after up) | `NEWS_SOURCE_DOWN` | LOW | HTTP fetch failure (up→down transition only) |
+| News source recovers after failure | `NEWS_SOURCE_RECOVERED` | LOW | HTTP fetch succeeds after previous failure (down→up transition only) |
 
 ## TimescaleDB Schema
 
