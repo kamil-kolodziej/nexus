@@ -97,7 +97,7 @@ class TimescaleWriter:
                         break
 
                 # Flush if we have enough or timeout elapsed
-                if len(batch) >= self._batch_size or (batch and len(batch) < self._batch_size):
+                if batch:
                     await self._write_batch(batch)
                     batch = []
 

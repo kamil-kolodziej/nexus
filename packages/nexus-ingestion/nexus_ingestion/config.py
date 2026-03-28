@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
@@ -34,8 +34,8 @@ class IngestionConfig(BaseSettings):
     # Exchange
     exchange_id: str = "binance"
     exchange_sandbox: bool = True
-    exchange_api_key: str = ""
-    exchange_api_secret: str = ""
+    exchange_api_key: SecretStr = SecretStr("")
+    exchange_api_secret: SecretStr = SecretStr("")
     subscribed_assets: list[str] = Field(default=["BTC/USDT"])
 
     # Redis
@@ -73,12 +73,12 @@ class IngestionConfig(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
-    ):
+        settings_cls: type[BaseSettings],
+        init_settings: Any,
+        env_settings: Any,
+        dotenv_settings: Any,
+        file_secret_settings: Any,
+    ) -> tuple[Any, ...]:
         # Precedence: explicit init args > env vars > config.toml > defaults.
         return (
             init_settings,
@@ -88,8 +88,8 @@ class IngestionConfig(BaseSettings):
             file_secret_settings,
         )
 
-    @staticmethod
-    def _toml_config_settings_source(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    @classmethod
+    def _toml_config_settings_source(cls, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
         """Load settings from config.toml-like file into flat IngestionConfig fields."""
         config_path = Path(os.getenv("NEXUS_CONFIG_FILE", "config.toml"))
         if not config_path.exists() or not config_path.is_file():

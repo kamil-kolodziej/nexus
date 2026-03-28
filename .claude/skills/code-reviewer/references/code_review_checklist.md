@@ -24,7 +24,7 @@ Dimension-by-dimension pass/fail checklist. Use during every review.
 ## 3. Security
 
 - [ ] **SRC-001**: No `create_order`, `cancel_order`, `edit_order` in read-only adapters
-- [ ] **SRC-003**: Credentials use `SecretStr`, not plain strings in shared config
+- [ ] **SRC-003**: Credentials use `SecretStr`, not plain strings (`exchange_api_key`, `exchange_api_secret` in `IngestionConfig`); unwrap only at adapter wiring boundary via `.get_secret_value()`
 - [ ] No credentials in `to_redis_fields()`, log messages, or health endpoint responses
 - [ ] Redis URL sanitized before logging (strip password)
 - [ ] `config.toml` in `.gitignore`, `config.example.toml` has no real secrets

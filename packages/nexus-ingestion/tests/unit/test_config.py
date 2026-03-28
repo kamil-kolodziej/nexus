@@ -89,8 +89,8 @@ def test_toml_credentials_ignored_and_warned(
     with caplog.at_level(logging.WARNING):
         config = IngestionConfig()
 
-    assert config.exchange_api_key == ""
-    assert config.exchange_api_secret == ""
+    assert config.exchange_api_key.get_secret_value() == ""
+    assert config.exchange_api_secret.get_secret_value() == ""
     assert "ignored" in caplog.text
     assert "SRC-003" in caplog.text
 
