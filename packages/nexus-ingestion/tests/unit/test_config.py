@@ -74,6 +74,27 @@ def test_init_overrides_env_and_toml(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert config.exchange_id == "bybit"
 
 
+def test_toml_credentials_ignored_and_warned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """SRC-003: api_key/api_secret in TOML must not load into config and must warn."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[exchange]\napi_key = "secret"\napi_secret = "topsecret"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NEXUS_CONFIG_FILE", str(config_file))
+
+    import logging
+    with caplog.at_level(logging.WARNING):
+        config = IngestionConfig()
+
+    assert config.exchange_api_key == ""
+    assert config.exchange_api_secret == ""
+    assert "ignored" in caplog.text
+    assert "SRC-003" in caplog.text
+
+
 def test_exchange_adapter_keeps_explicit_empty_assets() -> None:
     adapter = ExchangeAdapter("binance", assets=[])
     assert adapter._assets == []

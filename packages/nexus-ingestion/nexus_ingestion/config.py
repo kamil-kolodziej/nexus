@@ -105,14 +105,17 @@ class IngestionConfig(BaseSettings):
 
         exchange = raw.get("exchange")
         if isinstance(exchange, dict):
+            if "api_key" in exchange or "api_secret" in exchange:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "Credentials found in TOML config are ignored. "
+                    "Set NEXUS_EXCHANGE_API_KEY and NEXUS_EXCHANGE_API_SECRET "
+                    "via environment variables only (SRC-003)."
+                )
             if "id" in exchange:
                 settings["exchange_id"] = exchange["id"]
             if "sandbox" in exchange:
                 settings["exchange_sandbox"] = exchange["sandbox"]
-            if "api_key" in exchange:
-                settings["exchange_api_key"] = exchange["api_key"]
-            if "api_secret" in exchange:
-                settings["exchange_api_secret"] = exchange["api_secret"]
             if "subscribed_assets" in exchange:
                 settings["subscribed_assets"] = exchange["subscribed_assets"]
 
