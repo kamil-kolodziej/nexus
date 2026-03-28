@@ -113,6 +113,34 @@ class TestReadOnlyAccess:
         assert "edit_order" not in source
 
 
+class TestCredentialHandling:
+    """SRC-003: Credentials must be stored as SecretStr and never exposed in repr."""
+
+    def test_credentials_stored_as_secret_str(self) -> None:
+        from pydantic import SecretStr
+
+        adapter = ExchangeAdapter(
+            "binance",
+            api_key=SecretStr("my_api_key"),
+            api_secret=SecretStr("my_api_secret"),
+            sandbox=True,
+        )
+        assert isinstance(adapter._api_key, SecretStr)
+        assert isinstance(adapter._api_secret, SecretStr)
+
+    def test_credentials_not_exposed_in_repr(self) -> None:
+        from pydantic import SecretStr
+
+        adapter = ExchangeAdapter(
+            "binance",
+            api_key=SecretStr("super_secret_key"),
+            api_secret=SecretStr("super_secret_value"),
+            sandbox=True,
+        )
+        assert "super_secret_key" not in repr(adapter._api_key)
+        assert "super_secret_value" not in repr(adapter._api_secret)
+
+
 class TestTimestampTolerance:
     def test_old_timestamp_rejected(self, adapter: ExchangeAdapter) -> None:
         old_ts_ms = int((time.time() - 300) * 1000)  # 5 minutes ago

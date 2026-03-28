@@ -78,8 +78,8 @@ async def run() -> None:
     # Create and register exchange adapter
     exchange_adapter = ExchangeAdapter(
         config.exchange_id,
-        api_key=config.exchange_api_key.get_secret_value(),
-        api_secret=config.exchange_api_secret.get_secret_value(),
+        api_key=config.exchange_api_key,
+        api_secret=config.exchange_api_secret,
         sandbox=config.exchange_sandbox,
         assets=config.subscribed_assets,
         timestamp_tolerance=config.timestamp_tolerance,

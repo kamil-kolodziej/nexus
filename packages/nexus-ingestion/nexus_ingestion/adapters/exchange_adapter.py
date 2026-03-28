@@ -7,6 +7,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from pydantic import SecretStr
+
 from nexus_common.schemas.enums import AdapterStatus, EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
@@ -23,8 +25,8 @@ class ExchangeAdapter(BaseAdapter):
         self,
         exchange_id: str,
         *,
-        api_key: str = "",
-        api_secret: str = "",
+        api_key: SecretStr = SecretStr(""),
+        api_secret: SecretStr = SecretStr(""),
         sandbox: bool = True,
         assets: list[str] | None = None,
         timestamp_tolerance: int = 60,
@@ -37,8 +39,8 @@ class ExchangeAdapter(BaseAdapter):
             adapter_type="exchange",
         )
         self._exchange_id = exchange_id
-        self._api_key = api_key
-        self._api_secret = api_secret
+        self._api_key: SecretStr = api_key
+        self._api_secret: SecretStr = api_secret
         self._sandbox = sandbox
         self._assets = ["BTC/USDT"] if assets is None else assets
         self._timestamp_tolerance = timestamp_tolerance
@@ -58,11 +60,13 @@ class ExchangeAdapter(BaseAdapter):
             msg = f"Unsupported exchange: {self._exchange_id}"
             raise ValueError(msg)
 
+        api_key = self._api_key.get_secret_value()
+        api_secret = self._api_secret.get_secret_value()
         config: dict[str, Any] = {"enableRateLimit": True}
-        if self._api_key:
-            config["apiKey"] = self._api_key
-        if self._api_secret:
-            config["secret"] = self._api_secret
+        if api_key:
+            config["apiKey"] = api_key
+        if api_secret:
+            config["secret"] = api_secret
 
         self._exchange = exchange_class(config)
 
