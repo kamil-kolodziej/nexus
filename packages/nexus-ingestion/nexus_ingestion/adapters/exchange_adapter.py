@@ -108,7 +108,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 ticker = await self._exchange.watch_ticker(asset)
                 if self.status != AdapterStatus.CONNECTED:
-                    await self._transition_to_connected()
+                    await self._transition_to_connected(f"watch_ticker:{asset}")
                 event = self._normalize_tick(asset, ticker)
                 if event:
                     await self._emit_event(event)
@@ -123,7 +123,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 ob = await self._exchange.watch_order_book(asset)
                 if self.status != AdapterStatus.CONNECTED:
-                    await self._transition_to_connected()
+                    await self._transition_to_connected(f"watch_order_book:{asset}")
                 event = self._normalize_order_book(asset, ob)
                 if event:
                     await self._emit_event(event)
@@ -138,7 +138,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 trades = await self._exchange.watch_trades(asset)
                 if self.status != AdapterStatus.CONNECTED:
-                    await self._transition_to_connected()
+                    await self._transition_to_connected(f"watch_trades:{asset}")
                 for trade in trades:
                     event = self._normalize_trade(asset, trade)
                     if event:
@@ -154,7 +154,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 ohlcv_list = await self._exchange.watch_ohlcv(asset, "1m")
                 if self.status != AdapterStatus.CONNECTED:
-                    await self._transition_to_connected()
+                    await self._transition_to_connected(f"watch_ohlcv:{asset}")
                 for ohlcv in ohlcv_list:
                     event = self._normalize_candle(asset, ohlcv)
                     if event:
@@ -204,7 +204,10 @@ class ExchangeAdapter(BaseAdapter):
                 self.record_malformed()
                 return None
 
-            ts = self._parse_timestamp(ob.get("timestamp")) or datetime.now(timezone.utc)
+            ts = self._parse_timestamp(ob.get("timestamp"))
+            if ts is None:
+                self.record_malformed()
+                return None
 
             return MarketEvent(
                 source=self.adapter_id,
@@ -372,11 +375,11 @@ class ExchangeAdapter(BaseAdapter):
                 if asyncio.iscoroutine(result):
                     await result
 
-    async def _transition_to_connected(self) -> None:
+    async def _transition_to_connected(self, stream_key: str) -> None:
         """Transition back to CONNECTED after successful reconnection."""
         was_reconnecting = self.status in (AdapterStatus.RECONNECTING, AdapterStatus.DOWN)
         self.status = AdapterStatus.CONNECTED
-        self._stream_reconnect_attempts.clear()
+        self._stream_reconnect_attempts.pop(stream_key, None)
         if was_reconnecting and self._health_callback:
             alert = HealthAlert(
                 alert_type="ADAPTER_RECOVERED",

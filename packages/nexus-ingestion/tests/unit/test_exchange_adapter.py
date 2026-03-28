@@ -179,7 +179,7 @@ class TestReconnectionStateTransitions:
         )
         adapter.status = AdapterStatus.RECONNECTING
         adapter._stream_reconnect_attempts["watch_ticker:BTC/USDT"] = 2
-        await adapter._transition_to_connected()
+        await adapter._transition_to_connected("watch_ticker:BTC/USDT")
         assert adapter.status == AdapterStatus.CONNECTED
         assert adapter._stream_reconnect_attempts == {}
 
@@ -198,7 +198,7 @@ class TestReconnectionStateTransitions:
         assert alerts[0].alert_type == "ADAPTER_RECONNECTING"
 
         # RECONNECTING → CONNECTED (recovered)
-        await adapter._transition_to_connected()
+        await adapter._transition_to_connected("watch_ticker:BTC/USDT")
         assert len(alerts) == 2
         assert alerts[1].alert_type == "ADAPTER_RECOVERED"
 
@@ -213,7 +213,7 @@ class TestReconnectionStateTransitions:
         assert async_callback.call_args[0][0].alert_type == "ADAPTER_RECONNECTING"
 
         adapter.status = AdapterStatus.RECONNECTING
-        await adapter._transition_to_connected()
+        await adapter._transition_to_connected("watch_ticker:BTC/USDT")
         assert async_callback.await_count == 2
         assert async_callback.call_args[0][0].alert_type == "ADAPTER_RECOVERED"
 
@@ -251,3 +251,31 @@ class TestReconnectionStateTransitions:
         delays = [adapter._get_reconnect_delay(attempt) for attempt in range(5)]
         assert delays[0] < delays[1] < delays[2]
         assert all(d <= 60.0 for d in delays)
+
+    @pytest.mark.asyncio
+    async def test_only_recovered_stream_counter_is_cleared(self) -> None:
+        """Counter for the recovering stream is removed; other streams are unaffected."""
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        adapter.status = AdapterStatus.RECONNECTING
+        adapter._stream_reconnect_attempts["watch_ticker:BTC/USDT"] = 3
+        adapter._stream_reconnect_attempts["watch_order_book:BTC/USDT"] = 2
+
+        await adapter._transition_to_connected("watch_ticker:BTC/USDT")
+
+        assert "watch_ticker:BTC/USDT" not in adapter._stream_reconnect_attempts
+        assert adapter._stream_reconnect_attempts["watch_order_book:BTC/USDT"] == 2
+
+
+class TestOrderBookTimestamp:
+    def test_missing_timestamp_returns_none(self, adapter: ExchangeAdapter) -> None:
+        ob = {"bids": [[67234.50, 1.5]], "asks": [[67235.10, 0.8]], "timestamp": None}
+        event = adapter._normalize_order_book("BTC/USDT", ob)
+        assert event is None
+        assert adapter._malformed_count == 1
+
+    def test_stale_timestamp_returns_none(self, adapter: ExchangeAdapter) -> None:
+        old_ts_ms = int((time.time() - 300) * 1000)  # 5 minutes ago, outside 120s tolerance
+        ob = {"bids": [[67234.50, 1.5]], "asks": [[67235.10, 0.8]], "timestamp": old_ts_ms}
+        event = adapter._normalize_order_book("BTC/USDT", ob)
+        assert event is None
+        assert adapter._malformed_count == 1

@@ -182,7 +182,7 @@ Runtime status per adapter, exposed via `GET /health`.
 
 ## Validation Rules
 
-1. **Timestamp tolerance**: Events whose `timestamp` deviates from server time by more than `config.timestamp_tolerance` (default: 60s) are flagged and optionally dropped.
+1. **Timestamp tolerance**: Events whose `timestamp` is missing or deviates from server time by more than `config.timestamp_tolerance` (default: 60s) are logged and dropped. No server-time correction is applied.
 2. **Price positivity**: All price fields (`bid`, `ask`, `last`, `open`, `high`, `low`, `close`, `price`) must be > 0.
 3. **OrderBook ordering**: `bids` must be descending by price; `asks` must be ascending by price.
 4. **Schema version**: `schema_version` must be a valid semver string. Consumers check major version for compatibility.
