@@ -203,6 +203,48 @@ class TestReconnectionStateTransitions:
         assert alerts[1].alert_type == "ADAPTER_RECOVERED"
 
     @pytest.mark.asyncio
+    async def test_async_health_callback_is_awaited(self) -> None:
+        """Async health callbacks must be awaited — regression guard for Bug 1."""
+        async_callback = AsyncMock()
+        adapter = ExchangeAdapter("binance", sandbox=True, health_callback=async_callback)
+
+        await adapter._transition_to_reconnecting()
+        async_callback.assert_awaited_once()
+        assert async_callback.call_args[0][0].alert_type == "ADAPTER_RECONNECTING"
+
+        adapter.status = AdapterStatus.RECONNECTING
+        await adapter._transition_to_connected()
+        assert async_callback.await_count == 2
+        assert async_callback.call_args[0][0].alert_type == "ADAPTER_RECOVERED"
+
+    @pytest.mark.asyncio
+    async def test_per_stream_counters_are_independent(self) -> None:
+        """Two streams failing simultaneously must each get their own counter — regression guard for Bug 3."""
+        adapter = ExchangeAdapter("binance", sandbox=True, max_reconnect_attempts=10)
+        adapter.status = AdapterStatus.RECONNECTING
+
+        try:
+            from ccxt.base.errors import NetworkError
+        except ImportError:
+            pytest.skip("ccxt not installed")
+
+        error = NetworkError("disconnected")
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await adapter._handle_watch_error("watch_ticker", "BTC/USDT", error)
+            await adapter._handle_watch_error("watch_order_book", "BTC/USDT", error)
+
+        assert adapter._stream_reconnect_attempts["watch_ticker:BTC/USDT"] == 1
+        assert adapter._stream_reconnect_attempts["watch_order_book:BTC/USDT"] == 1
+
+    @pytest.mark.asyncio
+    async def test_check_and_transition_to_down_below_threshold(self) -> None:
+        """Status must stay RECONNECTING when attempts < max."""
+        adapter = ExchangeAdapter("binance", sandbox=True, max_reconnect_attempts=5)
+        adapter.status = AdapterStatus.RECONNECTING
+        await adapter._check_and_transition_to_down(4)
+        assert adapter.status == AdapterStatus.RECONNECTING
+
+    @pytest.mark.asyncio
     async def test_exponential_backoff_timing(self) -> None:
         adapter = ExchangeAdapter("binance", sandbox=True, max_reconnect_attempts=5)
         # Verify backoff increases

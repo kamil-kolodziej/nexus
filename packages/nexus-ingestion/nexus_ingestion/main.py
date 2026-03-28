@@ -22,11 +22,10 @@ from nexus_ingestion.service import IngestionService
 logger = logging.getLogger(__name__)
 
 
-async def _shutdown(service: IngestionService, loop: asyncio.AbstractEventLoop) -> None:
-    """Graceful shutdown sequence."""
+def _request_shutdown(stop_event: asyncio.Event) -> None:
+    """Signal handler — sets the stop event to trigger graceful shutdown."""
     logger.info("Received shutdown signal, stopping...")
-    await service.stop()
-    loop.stop()
+    stop_event.set()
 
 
 async def run() -> None:
@@ -103,24 +102,15 @@ async def run() -> None:
             service.register_adapter(news_adapter)
 
     loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
 
     # Register signal handlers
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(
-            sig,
-            lambda: asyncio.create_task(_shutdown(service, loop)),
-        )
+        loop.add_signal_handler(sig, _request_shutdown, stop_event)
 
     await service.start()
-
-    # Keep running until shutdown
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except asyncio.CancelledError:
-        pass
-    finally:
-        await service.stop()
+    await stop_event.wait()
+    await service.stop()
 
 
 def main() -> None:

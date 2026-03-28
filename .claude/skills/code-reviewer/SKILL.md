@@ -27,6 +27,7 @@ This skill is instruction-driven — no external scripts. When asked to review c
 - **Per-stream reconnect counters** — reconnect attempt state must be tracked per stream key (`f"{method}:{asset}"`), not on a single shared counter; shared counters inflate under concurrent failures and cause premature DOWN transitions.
 - Proper cancellation handling: every `while self._running` loop must catch `asyncio.CancelledError` and clean up.
 - Graceful shutdown: `stop()` must cancel tasks, await them, and close connections in correct order.
+- **No `loop.stop()` from within a task** — calling `loop.stop()` from an `asyncio` task while `asyncio.run()` still owns the loop causes `RuntimeError: Event loop stopped before Future completed`. Use an `asyncio.Event` instead: signal handlers set it, the main coroutine awaits it, then calls `stop()` once.
 
 ### 2. Adapter Contract Compliance
 
