@@ -154,6 +154,7 @@
 - [X] T046 [P] Harden IngestionService adapter restart path: store `call_later` handle for explicit cancellation on shutdown; call `adapter.stop()` before restarting to ensure clean state; reset restart count on normal adapter completion; fix cancelled-task log in `_on_adapter_done` in packages/nexus-ingestion/nexus_ingestion/service.py
 - [X] T047 [P] Unit tests for IngestionService: restart handle cancelled on stop, adapter.stop() called before restart, restart count resets on normal completion, max restart attempts respected, cancelled task does not restart, NEWS_ARTICLE routed to news publisher in packages/nexus-ingestion/tests/unit/test_service.py
 - [X] T048 Remove unused `nexus_common/config.py` (NexusBaseSettings, RedisSettings, TimescaleDBSettings, ExchangeSettings) — never imported; each service owns its config; shared config base deferred until a second service is built
+- [X] T049 [P] Move shared `_emit_event` logic into `BaseAdapter`: add `_event_callback`/`_health_callback` as `None` defaults and `_emit_event()` implementation; remove duplicate definitions from `ExchangeAdapter` and `NewsAdapter`
 
 ---
 

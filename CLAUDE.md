@@ -107,9 +107,9 @@ Specs describe what the code *does*, not what was originally intended. If code a
 
 ## Adapter Pattern (nexus-ingestion)
 
-All adapters subclass `BaseAdapter` and implement `connect() / subscribe() / run() / stop()`. Adapters communicate **only** via two injected callbacks:
-- `event_callback(MarketEvent)` — normalized data events
-- `health_callback(HealthAlert)` — state change and error alerts
+All adapters subclass `BaseAdapter` and implement `connect() / subscribe() / run() / stop()`. Adapters communicate **only** via two injected callbacks stored on `BaseAdapter`:
+- `_event_callback(MarketEvent)` — normalized data events; call via `await self._emit_event(event)` (defined on `BaseAdapter`, handles `record_event()` and coroutine-vs-sync dispatch)
+- `_health_callback(HealthAlert)` — state change and error alerts
 
 Adapters never import publishers or writers directly. This same callback-injection pattern is the model for inter-component wiring across the platform.
 

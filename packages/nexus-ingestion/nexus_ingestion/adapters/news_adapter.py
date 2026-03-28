@@ -166,14 +166,6 @@ class NewsAdapter(BaseAdapter):
             logger.debug("Failed to normalize RSS entry", exc_info=True)
             return None
 
-    async def _emit_event(self, event: MarketEvent) -> None:
-        """Send event to the registered callback."""
-        self.record_event()
-        if self._event_callback:
-            result = self._event_callback(event)
-            if asyncio.iscoroutine(result):
-                await result
-
     async def _emit_source_down_alert(self) -> None:
         """Emit a NEWS_SOURCE_DOWN health alert."""
         if not self._health_callback:

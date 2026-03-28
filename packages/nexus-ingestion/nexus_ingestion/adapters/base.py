@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Any, Callable
 
 from nexus_common.schemas.enums import AdapterStatus
-from nexus_common.schemas.health_alert import AdapterHealth
+from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
+from nexus_common.schemas.market_event import MarketEvent
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,8 @@ class BaseAdapter(abc.ABC):
         self._event_count = 0
         self._error_count = 0
         self._malformed_count = 0
+        self._event_callback: Callable[[MarketEvent], Any] | None = None
+        self._health_callback: Callable[[HealthAlert], Any] | None = None
 
     @property
     def adapter_id(self) -> str:
@@ -65,6 +70,14 @@ class BaseAdapter(abc.ABC):
     def record_malformed(self) -> None:
         """Mark that a malformed event was dropped."""
         self._malformed_count += 1
+
+    async def _emit_event(self, event: MarketEvent) -> None:
+        """Record and forward an event to the registered callback."""
+        self.record_event()
+        if self._event_callback:
+            result = self._event_callback(event)
+            if asyncio.iscoroutine(result):
+                await result
 
     @abc.abstractmethod
     async def connect(self) -> None:

@@ -316,14 +316,6 @@ class ExchangeAdapter(BaseAdapter):
         except (ValueError, OSError, OverflowError):
             return None
 
-    async def _emit_event(self, event: MarketEvent) -> None:
-        """Send event to the registered callback."""
-        self.record_event()
-        if self._event_callback:
-            result = self._event_callback(event)
-            if asyncio.iscoroutine(result):
-                await result
-
     async def _handle_watch_error(self, method: str, asset: str, error: Exception) -> None:
         """Handle errors from watch methods with health alert emission."""
         self.record_error()
