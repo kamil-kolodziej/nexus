@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
 
 from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
@@ -90,7 +91,7 @@ class IngestionService:
 
     async def handle_event(self, event: MarketEvent) -> None:
         """Route an event to all consumers: publisher, writer, gap detector."""
-        from nexus_common.schemas.enums import EventType
+        from nexus_common.schemas.enums import EventType, Severity
 
         # Publish to appropriate Redis stream
         if event.event_type == EventType.NEWS_ARTICLE:
@@ -102,7 +103,23 @@ class IngestionService:
 
         # Persist to TimescaleDB
         if self._timescale_writer:
-            self._timescale_writer.enqueue(event)
+            if not self._timescale_writer.enqueue(event):
+                logger.warning(
+                    "TimescaleDB queue full — event dropped (source=%s, type=%s)",
+                    event.source,
+                    event.event_type,
+                )
+                await self.handle_health_alert(
+                    HealthAlert(
+                        alert_type="PERSISTENCE_ERROR",
+                        adapter_id=event.source,
+                        severity=Severity.MEDIUM,
+                        timestamp=datetime.now(timezone.utc),
+                        message=(
+                            f"TimescaleDB queue full — event dropped for {event.source}"
+                        ),
+                    )
+                )
 
         # Update gap detector
         if self._gap_detector and event.asset:
@@ -205,7 +222,26 @@ class IngestionService:
         self._restart_handles.pop(adapter_id, None)
         adapter = self._adapters.get(adapter_id)
         if adapter and self._running:
-            asyncio.ensure_future(self._restart_adapter_async(adapter_id, adapter))
+            task = asyncio.create_task(
+                self._restart_adapter_async(adapter_id, adapter),
+                name=f"restart:{adapter_id}",
+            )
+            task.add_done_callback(
+                lambda t, aid=adapter_id: self._on_restart_done(aid, t)
+            )
+
+    def _on_restart_done(self, adapter_id: str, task: asyncio.Task) -> None:
+        """Log any exception that escapes the restart coroutine."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error(
+                "Restart coroutine for adapter %s raised an unexpected error: %s",
+                adapter_id,
+                exc,
+                exc_info=exc,
+            )
 
     async def _restart_adapter_async(self, adapter_id: str, adapter: BaseAdapter) -> None:
         """Clean up the adapter then start a fresh task."""

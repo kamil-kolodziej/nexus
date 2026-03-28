@@ -69,7 +69,7 @@ As a strategy developer, I want news articles from external sources to flow into
 - What happens when the Redis connection is lost while the ingestion service is running?
   → The service buffers events in memory up to a configurable limit, attempts reconnection with backoff, and resumes publishing once reconnected. If the buffer overflows, oldest events are dropped and a warning is logged.
 - What happens when TimescaleDB becomes unavailable while the ingestion service is running?
-  → Events continue to flow to Redis uninterrupted. The background persistence task queues write attempts and retries with backoff. Events remain in the persistence queue until TimescaleDB recovers. A health alert is emitted to `nexus:ingestion-health-events` stream. The backtesting engine may work with partial historical data if the outage persists.
+  → Events continue to flow to Redis uninterrupted. The background persistence task queues write attempts and retries with backoff. Events remain in the persistence queue until TimescaleDB recovers. A `PERSISTENCE_ERROR` health alert is emitted on each write failure. If the in-memory queue reaches its maximum size before TimescaleDB recovers, new events are dropped and a `PERSISTENCE_ERROR` alert is emitted immediately by the service. The backtesting engine may work with partial historical data if the outage persists.
 - What happens when the health alert stream (Redis) becomes unavailable?
   → Health alerts are logged locally and dropped. The health publisher does not buffer to avoid circular failure dependencies. Market data publishing continues uninterrupted.
 - What happens when system clock drift causes event timestamps to be in the future or far in the past?

@@ -213,6 +213,7 @@ INIT ──→ CONNECTED ──→ (receiving events)
 | Adapter enters RECONNECTING | `ADAPTER_RECONNECTING` | MEDIUM | Adapter state change |
 | Adapter enters DOWN | `ADAPTER_DOWN` | HIGH | Max reconnection attempts exhausted |
 | TimescaleDB write failure | `PERSISTENCE_ERROR` | MEDIUM | Background writer retry |
+| TimescaleDB queue full (event dropped by service) | `PERSISTENCE_ERROR` | MEDIUM | `IngestionService.handle_event` enqueue returns `False` |
 | Malformed event rate > threshold | `MALFORMED_SPIKE` | LOW | Counter exceeds configured rate |
 | News source unreachable | `NEWS_SOURCE_DOWN` | LOW | HTTP fetch failure |
 

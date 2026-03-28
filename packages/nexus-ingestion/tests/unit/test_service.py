@@ -220,3 +220,73 @@ class TestHandleEventRouting:
 
         market_pub.publish.assert_awaited_once()
         news_pub.publish.assert_not_awaited()
+
+
+class TestEnqueueFullEmitsHealthAlert:
+    def _make_event(self) -> MarketEvent:
+        return MarketEvent(
+            source="binance:exchange",
+            asset="BTC/USDT",
+            timestamp=datetime.now(timezone.utc),
+            event_type=EventType.TICK,
+            payload={"bid": 1.0, "ask": 1.1, "last": 1.05, "volume_24h": 100.0},
+        )
+
+    async def test_queue_full_emits_persistence_error_alert(self) -> None:
+        """enqueue() returning False must emit a PERSISTENCE_ERROR health alert."""
+        service = IngestionService(_make_config())
+
+        writer = MagicMock()
+        writer.enqueue.return_value = False
+        service._timescale_writer = writer
+
+        health_pub = AsyncMock()
+        service._health_publisher = health_pub
+
+        await service.handle_event(self._make_event())
+
+        health_pub.publish.assert_awaited_once()
+        alert = health_pub.publish.call_args[0][0]
+        assert alert.alert_type == "PERSISTENCE_ERROR"
+        assert alert.severity.value == "MEDIUM"
+
+    async def test_queue_not_full_no_alert(self) -> None:
+        """enqueue() returning True must not emit any health alert."""
+        service = IngestionService(_make_config())
+
+        writer = MagicMock()
+        writer.enqueue.return_value = True
+        service._timescale_writer = writer
+
+        health_pub = AsyncMock()
+        service._health_publisher = health_pub
+
+        await service.handle_event(self._make_event())
+
+        health_pub.publish.assert_not_awaited()
+
+
+class TestRestartTaskExceptionLogged:
+    async def test_on_restart_done_logs_exception(self) -> None:
+        """_on_restart_done must log errors that escape _restart_adapter_async."""
+        service = IngestionService(_make_config())
+
+        mock_task = MagicMock(spec=asyncio.Task)
+        mock_task.cancelled.return_value = False
+        mock_task.exception.return_value = RuntimeError("unexpected restart failure")
+
+        with patch("nexus_ingestion.service.logger") as mock_logger:
+            service._on_restart_done("test:exchange", mock_task)
+            mock_logger.error.assert_called_once()
+            assert "test:exchange" in mock_logger.error.call_args[0][1]
+
+    async def test_on_restart_done_silent_on_cancellation(self) -> None:
+        """_on_restart_done must not log when the restart task was cancelled."""
+        service = IngestionService(_make_config())
+
+        mock_task = MagicMock(spec=asyncio.Task)
+        mock_task.cancelled.return_value = True
+
+        with patch("nexus_ingestion.service.logger") as mock_logger:
+            service._on_restart_done("test:exchange", mock_task)
+            mock_logger.error.assert_not_called()
