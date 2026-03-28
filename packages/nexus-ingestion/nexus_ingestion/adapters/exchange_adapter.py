@@ -47,7 +47,7 @@ class ExchangeAdapter(BaseAdapter):
         self._health_callback = health_callback
         self._exchange: Any = None
         self._running = False
-        self._reconnect_attempt = 0
+        self._stream_reconnect_attempts: dict[str, int] = {}
 
     async def connect(self) -> None:
         """Create and configure the ccxt.pro exchange instance."""
@@ -90,10 +90,8 @@ class ExchangeAdapter(BaseAdapter):
             tasks.append(asyncio.create_task(self._watch_trades(asset)))
             tasks.append(asyncio.create_task(self._watch_ohlcv(asset)))
 
-        try:
-            await asyncio.gather(*tasks)
-        except asyncio.CancelledError:
-            pass
+        if tasks:
+            await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
 
     async def stop(self) -> None:
         """Gracefully close the exchange connection."""
@@ -110,7 +108,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 ticker = await self._exchange.watch_ticker(asset)
                 if self.status != AdapterStatus.CONNECTED:
-                    self._transition_to_connected()
+                    await self._transition_to_connected()
                 event = self._normalize_tick(asset, ticker)
                 if event:
                     await self._emit_event(event)
@@ -125,7 +123,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 ob = await self._exchange.watch_order_book(asset)
                 if self.status != AdapterStatus.CONNECTED:
-                    self._transition_to_connected()
+                    await self._transition_to_connected()
                 event = self._normalize_order_book(asset, ob)
                 if event:
                     await self._emit_event(event)
@@ -140,7 +138,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 trades = await self._exchange.watch_trades(asset)
                 if self.status != AdapterStatus.CONNECTED:
-                    self._transition_to_connected()
+                    await self._transition_to_connected()
                 for trade in trades:
                     event = self._normalize_trade(asset, trade)
                     if event:
@@ -156,7 +154,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 ohlcv_list = await self._exchange.watch_ohlcv(asset, "1m")
                 if self.status != AdapterStatus.CONNECTED:
-                    self._transition_to_connected()
+                    await self._transition_to_connected()
                 for ohlcv in ohlcv_list:
                     event = self._normalize_candle(asset, ohlcv)
                     if event:
@@ -319,31 +317,30 @@ class ExchangeAdapter(BaseAdapter):
     async def _handle_watch_error(self, method: str, asset: str, error: Exception) -> None:
         """Handle errors from watch methods with health alert emission."""
         self.record_error()
-        logger.warning(
-            "%s error for %s: %s", method, asset, error
-        )
+        logger.warning("%s error for %s: %s", method, asset, error)
 
-        # Emit health alert for reconnection state changes
+        stream_key = f"{method}:{asset}"
         try:
             from ccxt.base.errors import ExchangeNotAvailable, NetworkError
 
             if isinstance(error, (NetworkError, ExchangeNotAvailable)):
                 if self.status == AdapterStatus.CONNECTED:
-                    self._transition_to_reconnecting()
+                    self._stream_reconnect_attempts[stream_key] = 1
+                    await self._transition_to_reconnecting()
                 else:
-                    self._reconnect_attempt += 1
-                    self._check_and_transition_to_down()
+                    attempts = self._stream_reconnect_attempts.get(stream_key, 0) + 1
+                    self._stream_reconnect_attempts[stream_key] = attempts
+                    await self._check_and_transition_to_down(attempts)
         except ImportError:
             pass
 
-        # Brief delay before retry (ccxt.pro handles reconnection internally)
-        delay = self._get_reconnect_delay(self._reconnect_attempt)
+        attempt = self._stream_reconnect_attempts.get(stream_key, 0)
+        delay = self._get_reconnect_delay(attempt)
         await asyncio.sleep(delay)
 
-    def _transition_to_reconnecting(self) -> None:
+    async def _transition_to_reconnecting(self) -> None:
         """Transition to RECONNECTING state and emit alert."""
         self.status = AdapterStatus.RECONNECTING
-        self._reconnect_attempt = 1
         if self._health_callback:
             alert = HealthAlert(
                 alert_type="ADAPTER_RECONNECTING",
@@ -352,11 +349,13 @@ class ExchangeAdapter(BaseAdapter):
                 timestamp=datetime.now(timezone.utc),
                 message=f"{self.adapter_id} WebSocket disconnected, starting reconnection",
             )
-            self._health_callback(alert)
+            result = self._health_callback(alert)
+            if asyncio.iscoroutine(result):
+                await result
 
-    def _check_and_transition_to_down(self) -> None:
+    async def _check_and_transition_to_down(self, attempts: int) -> None:
         """Transition to DOWN if max reconnect attempts exhausted."""
-        if self._reconnect_attempt >= self._max_reconnect_attempts:
+        if attempts >= self._max_reconnect_attempts:
             self.status = AdapterStatus.DOWN
             if self._health_callback:
                 alert = HealthAlert(
@@ -366,16 +365,18 @@ class ExchangeAdapter(BaseAdapter):
                     timestamp=datetime.now(timezone.utc),
                     message=(
                         f"{self.adapter_id} entered DOWN state after "
-                        f"{self._reconnect_attempt} reconnection attempts"
+                        f"{attempts} reconnection attempts"
                     ),
                 )
-                self._health_callback(alert)
+                result = self._health_callback(alert)
+                if asyncio.iscoroutine(result):
+                    await result
 
-    def _transition_to_connected(self) -> None:
+    async def _transition_to_connected(self) -> None:
         """Transition back to CONNECTED after successful reconnection."""
         was_reconnecting = self.status in (AdapterStatus.RECONNECTING, AdapterStatus.DOWN)
         self.status = AdapterStatus.CONNECTED
-        self._reconnect_attempt = 0
+        self._stream_reconnect_attempts.clear()
         if was_reconnecting and self._health_callback:
             alert = HealthAlert(
                 alert_type="ADAPTER_RECOVERED",
@@ -384,7 +385,9 @@ class ExchangeAdapter(BaseAdapter):
                 timestamp=datetime.now(timezone.utc),
                 message=f"{self.adapter_id} reconnected successfully",
             )
-            self._health_callback(alert)
+            result = self._health_callback(alert)
+            if asyncio.iscoroutine(result):
+                await result
 
     def _get_reconnect_delay(self, attempt: int) -> float:
         """Calculate exponential backoff delay for reconnection."""

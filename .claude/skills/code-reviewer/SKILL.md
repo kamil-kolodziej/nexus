@@ -23,6 +23,8 @@ This skill is instruction-driven — no external scripts. When asked to review c
 - No blocking calls (`time.sleep`, synchronous I/O, CPU-heavy loops) in the event loop — use `asyncio.sleep`, `asyncio.to_thread`, or process pools.
 - Proper `await` on all coroutines. Watch for missing `await` producing unawaited coroutine warnings.
 - **No `TaskGroup`** — adapter isolation (FR-004) requires manual `asyncio.create_task` + `add_done_callback` so one adapter crash never cancels siblings.
+- **No `asyncio.gather` inside adapter `run()`** — use `asyncio.wait(..., return_when=ALL_COMPLETED)` so a crashing watch-stream task does not cancel its siblings.
+- **Per-stream reconnect counters** — reconnect attempt state must be tracked per stream key (`f"{method}:{asset}"`), not on a single shared counter; shared counters inflate under concurrent failures and cause premature DOWN transitions.
 - Proper cancellation handling: every `while self._running` loop must catch `asyncio.CancelledError` and clean up.
 - Graceful shutdown: `stop()` must cancel tasks, await them, and close connections in correct order.
 

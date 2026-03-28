@@ -42,7 +42,7 @@ As the platform operator, I want the ingestion service to automatically recover 
 **Acceptance Scenarios**:
 
 1. **Given** the ingestion service is connected to an exchange, **When** the WebSocket connection drops, **Then** the service detects the disconnect within 5 seconds and begins reconnection attempts with exponential backoff.
-2. **Given** the service is reconnecting, **When** the connection is restored, **Then** normal event publishing resumes automatically, a reconnection event is logged, and the restart counter for that adapter is reset to zero.
+2. **Given** the service is reconnecting, **When** the connection is restored, **Then** normal event publishing resumes automatically, a reconnection event is logged, and the per-stream reconnect counters are cleared.
 3. **Given** repeated disconnections occur, **When** the service cannot reconnect after the configured max attempts, **Then** it emits a health alert and continues retrying rather than crashing.
 
 ---

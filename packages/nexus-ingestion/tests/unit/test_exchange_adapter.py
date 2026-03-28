@@ -159,17 +159,18 @@ class TestReconnectionStateTransitions:
 
         # Use the adapter's handle_watch_error directly with a simulated error
         adapter.status = AdapterStatus.CONNECTED
-        adapter._transition_to_reconnecting()
+        await adapter._transition_to_reconnecting()
         assert adapter.status == AdapterStatus.RECONNECTING
 
-    def test_reconnecting_to_down_after_max_attempts(self) -> None:
+    @pytest.mark.asyncio
+    async def test_reconnecting_to_down_after_max_attempts(self) -> None:
         adapter = ExchangeAdapter("binance", sandbox=True, max_reconnect_attempts=3)
         adapter.status = AdapterStatus.RECONNECTING
-        adapter._reconnect_attempt = 3
-        adapter._check_and_transition_to_down()
+        await adapter._check_and_transition_to_down(3)
         assert adapter.status == AdapterStatus.DOWN
 
-    def test_recovered_from_reconnecting(self) -> None:
+    @pytest.mark.asyncio
+    async def test_recovered_from_reconnecting(self) -> None:
         alerts: list = []
         adapter = ExchangeAdapter(
             "binance",
@@ -177,10 +178,10 @@ class TestReconnectionStateTransitions:
             health_callback=lambda a: alerts.append(a),
         )
         adapter.status = AdapterStatus.RECONNECTING
-        adapter._reconnect_attempt = 2
-        adapter._transition_to_connected()
+        adapter._stream_reconnect_attempts["watch_ticker:BTC/USDT"] = 2
+        await adapter._transition_to_connected()
         assert adapter.status == AdapterStatus.CONNECTED
-        assert adapter._reconnect_attempt == 0
+        assert adapter._stream_reconnect_attempts == {}
 
     @pytest.mark.asyncio
     async def test_health_alerts_emitted_on_transitions(self) -> None:
@@ -192,12 +193,12 @@ class TestReconnectionStateTransitions:
         )
 
         # CONNECTED → RECONNECTING
-        adapter._transition_to_reconnecting()
+        await adapter._transition_to_reconnecting()
         assert len(alerts) == 1
         assert alerts[0].alert_type == "ADAPTER_RECONNECTING"
 
         # RECONNECTING → CONNECTED (recovered)
-        adapter._transition_to_connected()
+        await adapter._transition_to_connected()
         assert len(alerts) == 2
         assert alerts[1].alert_type == "ADAPTER_RECOVERED"
 

@@ -115,7 +115,7 @@ Adapters never import publishers or writers directly. This same callback-injecti
 
 ## Service Isolation (FR-004)
 
-`IngestionService` runs each adapter as an independent `asyncio.create_task` with `add_done_callback`. A crashing adapter restarts with exponential backoff. **No `asyncio.TaskGroup`** — one failure must never cancel siblings. This same isolation principle applies to strategy processes in `nexus-strategies` (one process per strategy) and exchange connectors in `nexus-executor`.
+`IngestionService` runs each adapter as an independent `asyncio.create_task` with `add_done_callback`. A crashing adapter restarts with exponential backoff. **No `asyncio.TaskGroup`** — one failure must never cancel siblings. Within `ExchangeAdapter.run()`, watch streams are supervised with `asyncio.wait(..., return_when=ALL_COMPLETED)` — never `asyncio.gather` — so a crashing stream task does not cancel its siblings. Per-stream reconnect counters (`_stream_reconnect_attempts`) prevent shared-counter inflation when multiple streams fail simultaneously. This same isolation principle applies to strategy processes in `nexus-strategies` (one process per strategy) and exchange connectors in `nexus-executor`.
 
 ## Redis Usage Pattern
 
