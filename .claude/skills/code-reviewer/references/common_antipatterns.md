@@ -79,9 +79,7 @@ asset=None
 **Problem**: Code defined but never called confuses readers and rots.
 
 Examples found:
-- `NexusBaseSettings` in `nexus_common/config.py` — defined but `IngestionConfig` uses flat fields instead
-- `Payload` union type in `market_event.py` — defined but `MarketEvent.payload` is typed as `dict`
-- `validated_payload()` method — exists but never called anywhere
+- `validated_payload()` on `MarketEvent` — use this to get a typed payload object (`Tick`, `Candle`, etc.) in consumers; do not access `event.payload` as a raw dict in business logic
 
 **Fix**: Either wire it in or remove it. Dead code is a lie about what the system does.
 
@@ -89,19 +87,9 @@ Examples found:
 
 ## 6. Duplicated Patterns Without Shared Base
 
-**Problem**: Same logic copy-pasted across files.
+**Problem**: Same logic copy-pasted across adapter subclasses instead of living in `BaseAdapter`.
 
-```python
-# Both ExchangeAdapter and NewsAdapter have identical _emit_event:
-async def _emit_event(self, event):
-    self.record_event()
-    if self._event_callback:
-        result = self._event_callback(event)
-        if asyncio.iscoroutine(result):
-            await result
-```
-
-**Fix**: Move to `BaseAdapter`. Same applies to the `iscoroutine` callback pattern used in 4+ places.
+**Correct pattern**: `_emit_event` is defined once on `BaseAdapter` — call `await self._emit_event(event)` from any adapter. Do not redefine it in subclasses.
 
 ---
 

@@ -1,0 +1,43 @@
+[exchange]
+id = "binance"
+sandbox = true
+# API credentials should be set via environment variables:
+# NEXUS_EXCHANGE_API_KEY, NEXUS_EXCHANGE_API_SECRET
+subscribed_assets = ["BTC/USDT"]
+
+[redis]
+url = "redis://localhost:6379"
+buffer_max = 10000
+market_events_stream = "nexus:market-events"
+news_events_stream = "nexus:news-events"
+health_events_stream = "nexus:ingestion-health-events"
+market_events_maxlen = 100000
+news_events_maxlen = 10000
+health_events_maxlen = 5000
+
+[timescaledb]
+dsn = "postgresql://nexus:nexus_dev@localhost:5432/nexus"
+batch_size = 500
+flush_interval = 5.0
+queue_maxsize = 50000
+
+[news]
+poll_interval = 300
+sources = []
+# Example RSS source:
+# [[news.sources]]
+# name = "coindesk-rss"
+# type = "rss"
+# url = "https://www.coindesk.com/arc/outboundfeeds/rss/"
+
+[monitoring]
+health_host = "127.0.0.1"
+health_port = 8080
+gap_threshold = 60
+timestamp_tolerance = 60
+malformed_rate_threshold = 2
+
+[supervisor]
+max_restart_attempts = 10
+restart_backoff_base = 1.0
+restart_backoff_max = 60.0

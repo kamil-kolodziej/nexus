@@ -24,7 +24,7 @@ Dimension-by-dimension pass/fail checklist. Use during every review.
 ## 3. Security
 
 - [ ] **SRC-001**: No `create_order`, `cancel_order`, `edit_order` in read-only adapters
-- [ ] **SRC-003**: Credentials use `SecretStr`, not plain strings in shared config
+- [ ] **SRC-003**: Credentials use `SecretStr` end-to-end: `IngestionConfig` fields, `ExchangeAdapter` constructor params, and stored fields are all `SecretStr`; `.get_secret_value()` is called only inside `connect()` as a local variable, never stored as plain `str`
 - [ ] No credentials in `to_redis_fields()`, log messages, or health endpoint responses
 - [ ] Redis URL sanitized before logging (strip password)
 - [ ] `config.toml` in `.gitignore`, `config.example.toml` has no real secrets
@@ -76,6 +76,44 @@ Dimension-by-dimension pass/fail checklist. Use during every review.
 - [ ] No flake8 violations: unused imports, bare `except:`, mutable defaults, missing f-string placeholders
 - [ ] Type annotations on public APIs
 - [ ] `from __future__ import annotations` enables PEP 604 union syntax
+
+## 11. Spec & Documentation Alignment
+
+**Step 0 — determine spec root**: derive feature ID from branch name or arguments → `specs/<feature-id>/`
+
+**spec.md**
+- [ ] Every FR-* requirement has a corresponding implementation
+- [ ] Every SRC-* safety constraint is enforced in code
+- [ ] Acceptance scenario outcomes match actual code behaviour
+- [ ] Edge cases are handled exactly as documented
+
+**data-model.md**
+- [ ] Pydantic model field names and types match spec entity definitions
+- [ ] All validation rules (price > 0, timestamp tolerance, semver regex, orderbook ordering) are implemented
+- [ ] `asset=None` for non-asset events — never empty string `""`
+
+**contracts/*.md** (check every contract file in the directory)
+- [ ] Stream names in code match contract headers exactly
+- [ ] MAXLEN values in publisher calls match contract tables
+- [ ] Payload field names match contract payload schemas
+- [ ] Every `alert_type` string in code appears in `contracts/health-events.md`; no undocumented types
+- [ ] `HealthPublisher` does NOT buffer (contract forbids it)
+
+**CLAUDE.md architectural invariants**
+- [ ] No `asyncio.TaskGroup` anywhere in adapters or service
+- [ ] No `asyncio.gather` inside `ExchangeAdapter.run()` — uses `asyncio.wait(ALL_COMPLETED)`
+- [ ] Per-stream reconnect counters keyed by `f"{method}:{asset}"` (not a single shared counter)
+- [ ] `SecretStr` end-to-end; `.get_secret_value()` only inside `connect()`
+- [ ] Shutdown uses `asyncio.Event` — never `loop.stop()` from within a task
+- [ ] Adapters communicate via injected callbacks only — no direct publisher/writer imports
+
+**tasks.md**
+- [ ] Each recently marked `[X]` task: the described file and behaviour exist in code
+- [ ] New fixes or requirements surfaced in this review are captured in tasks.md
+
+**README.md**
+- [ ] Install and run commands still accurate
+- [ ] Monorepo structure diagram matches actual `packages/` layout
 
 ## 10. Tests
 

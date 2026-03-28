@@ -1,0 +1,39 @@
+# Fixture used by test_config.py drift protection test.
+# Every TOML-mappable field must appear here with a non-default value so
+# the test can distinguish a working mapping from a silently missing one.
+
+[exchange]
+id = "kraken"
+sandbox = false
+subscribed_assets = ["ETH/USDT"]
+
+[redis]
+url = "redis://redis-host:6380"
+buffer_max = 500
+market_events_stream = "test:market"
+news_events_stream = "test:news"
+health_events_stream = "test:health"
+market_events_maxlen = 50000
+news_events_maxlen = 2000
+health_events_maxlen = 1000
+
+[timescaledb]
+dsn = "postgresql://user:pass@db:5433/testdb"
+batch_size = 100
+flush_interval = 2.5
+queue_maxsize = 1000
+
+[news]
+poll_interval = 60
+
+[monitoring]
+health_host = "0.0.0.0"
+health_port = 9090
+gap_threshold = 30
+timestamp_tolerance = 120
+malformed_rate_threshold = 5
+
+[supervisor]
+max_restart_attempts = 5
+restart_backoff_base = 2.0
+restart_backoff_max = 30.0

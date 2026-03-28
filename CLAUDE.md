@@ -1,0 +1,156 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What Nexus Is
+
+A fully automated multi-asset trading platform with seconds-level execution. Multiple pluggable weighted strategies (technical, ML, sentiment, arbitrage, statistical, rule-based) are combined into a continuously running probability loop that emits trade decisions. Supports paper trading and backtesting through the **same code paths** as live trading — the only difference is the executor implementation.
+
+## Planned Monorepo Structure
+
+```
+packages/
+  nexus-common/       ← shared types: MarketEvent, Signal, TradeIntent, serialization  [EXISTS]
+  nexus-ingestion/    ← data source adapters service                                    [EXISTS]
+  nexus-exchange/     ← ExchangeConnector protocol + ccxt/ib_insync implementations
+  nexus-strategies/   ← Strategy interface, built-in strategies, Strategy Manager
+  nexus-aggregator/   ← signal aggregation + probability loop (NumPy)
+  nexus-risk/         ← Risk Manager, 5-layer safety, state machine
+  nexus-executor/     ← Execution engine, order lifecycle, position tracker
+  nexus-api/          ← FastAPI backend for dashboard
+  nexus-sentiment/    ← NLP sentiment pipeline: consumes NewsArticle, produces SentimentScore
+  nexus-backtest/     ← backtesting engine + simulated executor
+dashboard/            ← React + TypeScript frontend
+```
+
+## Platform Data Flow
+
+```
+Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per strategy process)
+                                        │                                     ↓ Signal
+                                        └─→ nexus-sentiment (NewsArticle → SentimentScore → Redis Streams → nexus-strategies)
+                                               nexus-aggregator (NumPy probability loop)
+                                                          ↓ TradeIntent
+                                                  nexus-risk (5-layer validation)
+                                                          ↓
+                                               nexus-executor (ccxt) → Exchanges
+                                                          ↓
+                                         Redis (hot state) + TimescaleDB (history)
+                                                          ↓
+                                         nexus-api → WebSocket → dashboard
+```
+
+## Core Domain Types (cross all service boundaries)
+
+All defined in `nexus-common` and shared across packages:
+
+- **`MarketEvent`** — normalized envelope for all ingested data: `source`, `asset` (`None` for non-asset events, never `""`), `timestamp` (UTC), `event_type`, `schema_version` (semver), `payload` (dict validated via `validated_payload()`)
+- **`Signal`** — strategy output: `strategy_name`, `asset`, `direction` (BUY/SELL/HOLD), `confidence` (0.0–1.0), `timestamp`, `reasoning`, `expiry`
+- **`TradeIntent`** — aggregator output: `asset`, `direction`, `composite_score`, `contributing_signals[]`, `timestamp`
+
+## Commands
+
+**Install (from repo root):**
+```bash
+pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev]
+```
+
+**Run all tests:**
+```bash
+pytest
+```
+
+**Run a single test file:**
+```bash
+pytest packages/nexus-ingestion/tests/unit/test_exchange_adapter.py
+```
+
+**Run a single test by name:**
+```bash
+pytest -k "test_valid_ticker_produces_tick_event"
+```
+
+**Run only unit tests (no Docker required):**
+```bash
+pytest packages/nexus-ingestion/tests/unit packages/nexus-common/tests
+```
+
+**Run integration tests (requires Docker):**
+```bash
+docker compose -f docker-compose.dev.yml up -d
+pytest packages/nexus-ingestion/tests/integration
+```
+
+**Update contract snapshots (syrupy):**
+```bash
+pytest packages/nexus-ingestion/tests/contract --snapshot-update
+```
+
+**Run the ingestion service:**
+```bash
+cp config.example.toml config.toml  # edit as needed
+NEXUS_EXCHANGE_API_KEY=... NEXUS_EXCHANGE_API_SECRET=... python -m nexus_ingestion.main
+```
+
+## Spec Maintenance (speckit)
+
+This project uses **speckit** — specs live in `specs/<feature-id>/` and are the source of truth for requirements, data models, contracts, and tasks. Each feature has: `spec.md`, `plan.md`, `data-model.md`, `tasks.md`, `quickstart.md`, `contracts/`, and `checklists/`.
+
+After any implementation change, update the relevant spec files to stay in sync with the code:
+
+- **Behaviour changed** (e.g. edge case works differently than specified) → update the edge case in `spec.md`
+- **Data model changed** (field added, type changed, new entity) → update `data-model.md` and the relevant `contracts/` file
+- **New task completed** → add it as `[X]` in `tasks.md`
+- **Feature fully implemented** → set `**Status**: Implemented` in `spec.md`
+
+Specs describe what the code *does*, not what was originally intended. If code and spec diverge, update the spec to match the code.
+
+## Adapter Pattern (nexus-ingestion)
+
+All adapters subclass `BaseAdapter` and implement `connect() / subscribe() / run() / stop()`. Adapters communicate **only** via two injected callbacks stored on `BaseAdapter`:
+- `_event_callback(MarketEvent)` — normalized data events; call via `await self._emit_event(event)` (defined on `BaseAdapter`, handles `record_event()` and coroutine-vs-sync dispatch)
+- `_health_callback(HealthAlert)` — state change and error alerts
+
+Adapters never import publishers or writers directly. This same callback-injection pattern is the model for inter-component wiring across the platform.
+
+## Service Isolation (FR-004)
+
+`IngestionService` runs each adapter as an independent `asyncio.create_task` with `add_done_callback`. A crashing adapter restarts with exponential backoff. **No `asyncio.TaskGroup`** — one failure must never cancel siblings. Within `ExchangeAdapter.run()`, watch streams are supervised with `asyncio.wait(..., return_when=ALL_COMPLETED)` — never `asyncio.gather` — so a crashing stream task does not cancel its siblings. Per-stream reconnect counters (`_stream_reconnect_attempts`) prevent shared-counter inflation when multiple streams fail simultaneously. This same isolation principle applies to strategy processes in `nexus-strategies` (one process per strategy) and exchange connectors in `nexus-executor`.
+
+## Redis Usage Pattern
+
+- **Redis Pub/Sub** — real-time market data notifications (ticks, order books) where minimal latency matters and message loss is acceptable
+- **Redis Streams with consumer groups** — durable delivery for trade intents and risk decisions (at-least-once, replayable)
+- **Redis as hot state cache** — current prices, order books, positions, probability matrix
+
+`RedisPublisher` buffers events in a bounded deque on disconnect and flushes via pipeline on reconnect. `HealthPublisher` does **not** buffer — alerts are dropped when Redis is unavailable to avoid circular dependencies.
+
+## Config Precedence
+
+`IngestionConfig` (pydantic-settings) loads in this order (highest wins):
+1. Explicit `__init__` kwargs
+2. `NEXUS_*` environment variables
+3. `config.toml` (path overridden by `NEXUS_CONFIG_FILE`)
+4. Defaults
+
+Exchange credentials must be set via env vars only (`NEXUS_EXCHANGE_API_KEY`, `NEXUS_EXCHANGE_API_SECRET`), never in TOML.
+
+## Test Layout
+
+| Directory | Type | Infra needed |
+|-----------|------|-------------|
+| `tests/unit/` | Pure unit, all mocked | None |
+| `tests/integration/` | Real containers via testcontainers | Docker |
+| `tests/contract/` | Syrupy snapshot tests for serialization stability | None |
+
+Integration tests auto-skip if `testcontainers` is not importable. Root `pytest` config: `asyncio_mode = "auto"`, `--import-mode=importlib`.
+
+## Backtesting Principle
+
+The backtesting engine runs identical strategy, aggregation, and risk code. Only the executor is swapped for a simulated implementation modeling slippage, latency, partial fills, fees, and market impact. No separate backtesting code paths that can diverge from production — paper trading mode is the same single flag.
+
+## Storage
+
+- **TimescaleDB** — all market events, trade history, audit trail, backtest queries. Schema at `packages/nexus-ingestion/nexus_ingestion/persistence/schema.sql`. Writes use `asyncpg.copy_records_to_table` (no ORM in the hot path).
+- **Redis** — hot state (prices, positions, probability matrix)
+- **ClickHouse** — planned for large-scale analytics and reporting
