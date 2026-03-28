@@ -9,6 +9,10 @@ import pytest
 from nexus_ingestion.adapters.exchange_adapter import ExchangeAdapter
 from nexus_ingestion.config import IngestionConfig
 
+# Fixture covering every TOML-mappable field with non-default values.
+_FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
+_ALL_FIELDS_TOML = _FIXTURES_DIR / "config_all_fields.toml"
+
 
 @pytest.fixture(autouse=True)
 def clear_nexus_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,3 +77,50 @@ def test_init_overrides_env_and_toml(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_exchange_adapter_keeps_explicit_empty_assets() -> None:
     adapter = ExchangeAdapter("binance", assets=[])
     assert adapter._assets == []
+
+
+def test_toml_all_sections_map_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drift protection: every TOML-mappable field must round-trip from the fixture file.
+
+    If a new field is added to IngestionConfig but forgotten in _toml_config_settings_source,
+    its assertion here will fail because the loader returns the default instead of the
+    non-default fixture value.
+    """
+    monkeypatch.setenv("NEXUS_CONFIG_FILE", str(_ALL_FIELDS_TOML))
+    c = IngestionConfig()
+
+    # exchange
+    assert c.exchange_id == "kraken"
+    assert c.exchange_sandbox is False
+    assert c.subscribed_assets == ["ETH/USDT"]
+
+    # redis
+    assert c.redis_url == "redis://redis-host:6380"
+    assert c.redis_buffer_max == 500
+    assert c.market_events_stream == "test:market"
+    assert c.news_events_stream == "test:news"
+    assert c.health_events_stream == "test:health"
+    assert c.market_events_maxlen == 50000
+    assert c.news_events_maxlen == 2000
+    assert c.health_events_maxlen == 1000
+
+    # timescaledb
+    assert c.timescaledb_dsn == "postgresql://user:pass@db:5433/testdb"
+    assert c.batch_size == 100
+    assert c.flush_interval == 2.5
+    assert c.queue_maxsize == 1000
+
+    # news
+    assert c.news_poll_interval == 60
+
+    # monitoring
+    assert c.health_host == "0.0.0.0"
+    assert c.health_port == 9090
+    assert c.gap_threshold == 30
+    assert c.timestamp_tolerance == 120
+    assert c.malformed_rate_threshold == 5
+
+    # supervisor
+    assert c.max_restart_attempts == 5
+    assert c.restart_backoff_base == 2.0
+    assert c.restart_backoff_max == 30.0

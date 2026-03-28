@@ -31,7 +31,13 @@ sources = []
 # url = "https://www.coindesk.com/arc/outboundfeeds/rss/"
 
 [monitoring]
+health_host = "127.0.0.1"
 health_port = 8080
 gap_threshold = 60
 timestamp_tolerance = 60
 malformed_rate_threshold = 2
+
+[supervisor]
+max_restart_attempts = 10
+restart_backoff_base = 1.0
+restart_backoff_max = 60.0

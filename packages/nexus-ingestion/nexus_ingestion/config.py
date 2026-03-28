@@ -154,6 +154,7 @@ class IngestionConfig(BaseSettings):
         monitoring = raw.get("monitoring")
         if isinstance(monitoring, dict):
             monitoring_fields = {
+                "health_host": "health_host",
                 "health_port": "health_port",
                 "gap_threshold": "gap_threshold",
                 "timestamp_tolerance": "timestamp_tolerance",
