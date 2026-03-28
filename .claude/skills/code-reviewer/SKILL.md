@@ -11,9 +11,9 @@ Review guide tailored to the Nexus monorepo: Python 3.11+, asyncio, pydantic v2,
 
 This skill is instruction-driven — no external scripts. When asked to review code:
 
-1. Read the file(s) under review.
+1. Read the file(s) under review **and** the relevant spec/contract files listed in Dimension 11.
 2. Walk through each dimension below, checking for violations.
-3. Output findings grouped by severity: **Critical > Design > Minor**.
+3. Output findings grouped by severity: **Critical > Design > Minor**, followed by a **Spec Alignment** section.
 4. For each finding: state the issue, reference the file + line, and suggest a concrete fix.
 
 ## Review Dimensions
@@ -91,6 +91,58 @@ The project uses pre-commit hooks for automated Python quality gates. When revie
 - **mypy / type hints** — type annotations on public APIs. `from __future__ import annotations` enables PEP 604 syntax (`X | Y`).
 - If pre-commit is not yet configured, flag files that would fail these checks.
 
+### 11. Spec & Documentation Alignment
+
+**Determine the spec directory first.** The feature ID is the branch name prefix or explicitly passed in arguments (e.g. `branch:001-data-ingestion` → feature `001-data-ingestion`). The spec root is `specs/<feature-id>/`. All paths below are relative to that root. If the feature ID is ambiguous, list the `specs/` subdirectories and pick the best match.
+
+**Read these files before starting a review** (load once, reference throughout):
+- `CLAUDE.md` — architectural decisions and platform-wide invariants
+- `README.md` — install/run commands, package structure
+- `{SPEC_DIR}/spec.md` — FR-* requirements, SRC-* safety constraints, acceptance scenarios, edge cases
+- `{SPEC_DIR}/data-model.md` — entity field names, types, validation rules
+- `{SPEC_DIR}/contracts/` — one file per stream/interface; all must be checked
+- `{SPEC_DIR}/tasks.md` — which tasks are claimed complete
+- `{SPEC_DIR}/plan.md` — key design decisions and rationale (when relevant)
+- `{SPEC_DIR}/checklists/` — any requirements or acceptance checklists
+
+**Checks to perform:**
+
+#### Against `{SPEC_DIR}/spec.md`
+- Every FR-* requirement: identify the code that implements it; flag any that are missing or contradict the spec.
+- Every SRC-* safety constraint: verify it is enforced in code, not just documented.
+- Acceptance scenarios: for each "Given/When/Then", verify the code behaviour matches the documented outcome.
+- Edge cases: for each documented edge case, verify the code handles it as described.
+
+#### Against `{SPEC_DIR}/data-model.md`
+- Pydantic model field names and types must match the spec's entity definitions.
+- Validation rules (e.g. price > 0, timestamp tolerance, semver regex) must be enforced.
+- `asset=None` for non-asset events — never `""`.
+
+#### Against `{SPEC_DIR}/contracts/*.md`
+- Stream names in code must match contract headers exactly.
+- MAXLEN values in publisher calls must match contract tables.
+- Payload field names emitted by normalizers must match the contract payload schemas.
+- Every `alert_type` string used in code must appear in the health-events contract; any new one is drift.
+- `HealthPublisher` MUST NOT buffer — contract explicitly forbids it.
+
+#### Against `CLAUDE.md`
+- No `asyncio.TaskGroup` — use manual `create_task` + `add_done_callback`.
+- No `asyncio.gather` inside `ExchangeAdapter.run()` — use `asyncio.wait(ALL_COMPLETED)`.
+- Per-stream reconnect counters (`_stream_reconnect_attempts`) keyed by `f"{method}:{asset}"`.
+- `SecretStr` end-to-end; `.get_secret_value()` only inside `connect()`.
+- `asyncio.Event` for shutdown signal — never `loop.stop()` from within a task.
+- Adapters communicate via callbacks only — no direct publisher/writer imports.
+
+#### Against `{SPEC_DIR}/tasks.md`
+- For any task recently marked `[X]`: spot-check the described file and behaviour exist in code.
+- If the review reveals a new requirement or fix not in `tasks.md`, flag it as missing.
+
+#### Against `README.md`
+- Install commands, run commands, and package names are still accurate.
+- Monorepo structure diagram matches the actual `packages/` layout.
+
+**Output rule**: If everything aligns, write "✓ No spec drift detected". If drift is found, list each item: which doc it violates, what the doc says, what the code does, and whether the doc or the code is the source of truth.
+
 ### 10. Test Quality
 
 - Unit tests: no I/O, no Docker, fast. Mock external dependencies.
@@ -117,12 +169,27 @@ The project uses pre-commit hooks for automated Python quality gates. When revie
 - **<Issue title>** — <file>:<line>
   <Description>. Fix: <concrete suggestion>.
 
+### Spec Alignment
+**Spec root**: `specs/<feature-id>/`
+
+#### Drift found
+- **<Doc file> ↔ <code file>:<line>** — <what the doc says> vs <what the code does>. Fix: update [doc|code].
+
+#### ✓ Verified aligned
+- spec.md FR-001 … FR-N — all requirements implemented
+- data-model.md fields — match Pydantic models
+- contracts/*.md — stream names, MAXLEN, payload fields, alert_type catalog
+- CLAUDE.md architectural invariants — no TaskGroup, per-stream counters, SecretStr, asyncio.Event shutdown
+- tasks.md — all [X] tasks spot-checked
+- README.md — commands and structure accurate
+
 ### Summary
 | Severity | Count |
 |----------|-------|
 | Critical | N     |
 | Design   | N     |
 | Minor    | N     |
+| Spec drift | N   |
 ```
 
 ## Reference Documentation
@@ -130,3 +197,4 @@ The project uses pre-commit hooks for automated Python quality gates. When revie
 - `references/code_review_checklist.md` — dimension-by-dimension checklist with pass/fail criteria
 - `references/coding_standards.md` — Python and Nexus conventions
 - `references/common_antipatterns.md` — real antipatterns found in this codebase
+- `references/spec_alignment.md` — step-by-step guide: which spec files to load, what to compare, common drift patterns, when to update docs vs code

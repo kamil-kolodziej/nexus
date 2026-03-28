@@ -33,7 +33,8 @@
 | `ADAPTER_RECONNECTING` | MEDIUM | Adapter lost connection, reconnecting | `"binance:exchange WebSocket disconnected, starting reconnection"` |
 | `PERSISTENCE_ERROR` | MEDIUM | TimescaleDB write failed, retrying | `"TimescaleDB batch write failed: connection refused. Queue depth: 1500"` |
 | `MALFORMED_SPIKE` | LOW | Malformed event rate exceeded threshold | `"binance:exchange malformed event rate 5/min exceeds threshold 2/min"` |
-| `NEWS_SOURCE_DOWN` | LOW | News source fetch failed | `"newsapi:news fetch failed: HTTP 503. Retrying next interval."` |
+| `NEWS_SOURCE_DOWN` | LOW | News source fetch failed (first failure after a working state) | `"test-rss:news fetch failed. Retrying next interval."` |
+| `NEWS_SOURCE_RECOVERED` | LOW | News source fetch succeeded after a previous failure | `"test-rss:news fetch succeeded after previous failure."` |
 | `ADAPTER_RECOVERED` | LOW | Adapter successfully reconnected | `"binance:exchange reconnected after 15s downtime"` |
 
 ## Consumer Group Convention
