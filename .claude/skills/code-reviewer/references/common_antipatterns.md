@@ -79,7 +79,6 @@ asset=None
 **Problem**: Code defined but never called confuses readers and rots.
 
 Examples found:
-- `NexusBaseSettings` in `nexus_common/config.py` — defined but `IngestionConfig` uses flat fields instead
 - `Payload` union type in `market_event.py` — defined but `MarketEvent.payload` is typed as `dict`
 - `validated_payload()` method — exists but never called anywhere
 

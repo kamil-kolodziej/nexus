@@ -41,7 +41,7 @@
 - [X] T006 Implement EventType, AdapterStatus, Severity enums per data-model.md in packages/nexus-common/nexus_common/schemas/enums.py
 - [X] T007 [P] Implement MarketEvent envelope + Tick, OrderBookUpdate, Trade, Candle, NewsArticle Pydantic models with validation rules (price positivity, orderbook ordering, schema_version semver) in packages/nexus-common/nexus_common/schemas/market_event.py
 - [X] T008 [P] Implement HealthAlert + AdapterHealth Pydantic models per data-model.md in packages/nexus-common/nexus_common/schemas/health_alert.py
-- [X] T009 [P] Implement shared config base with pydantic-settings (BaseSettings, TOML source, env prefix NEXUS_, SecretStr for credentials per SRC-003) in packages/nexus-common/nexus_common/config.py
+- [X] T009 [P] Implement shared config base with pydantic-settings (BaseSettings, TOML source, env prefix NEXUS_, SecretStr for credentials per SRC-003) — later removed as unused; each service defines its own config (see T048)
 - [X] T010 [P] Implement async Redis connection factory with retry_on_timeout and ExponentialBackoff(retries=3) in packages/nexus-common/nexus_common/redis_client.py
 - [X] T011 Implement ingestion-specific config (exchange list, subscribed assets, polling intervals, persistence batch settings, gap detector thresholds) in packages/nexus-ingestion/nexus_ingestion/config.py
 - [X] T012 Implement BaseAdapter ABC with async connect, subscribe, run loop, stop, AdapterStatus state tracking, and AdapterHealth property in packages/nexus-ingestion/nexus_ingestion/adapters/base.py
@@ -153,6 +153,7 @@
 - [X] T044 [P] Fix NewsAdapter asset field: pass `asset=None` (not `asset=""`) for NEWS_ARTICLE events to match MarketEvent contract (asset must be `None` for non-asset events, never empty string) in packages/nexus-ingestion/nexus_ingestion/adapters/news_adapter.py
 - [X] T046 [P] Harden IngestionService adapter restart path: store `call_later` handle for explicit cancellation on shutdown; call `adapter.stop()` before restarting to ensure clean state; reset restart count on normal adapter completion; fix cancelled-task log in `_on_adapter_done` in packages/nexus-ingestion/nexus_ingestion/service.py
 - [X] T047 [P] Unit tests for IngestionService: restart handle cancelled on stop, adapter.stop() called before restart, restart count resets on normal completion, max restart attempts respected, cancelled task does not restart, NEWS_ARTICLE routed to news publisher in packages/nexus-ingestion/tests/unit/test_service.py
+- [X] T048 Remove unused `nexus_common/config.py` (NexusBaseSettings, RedisSettings, TimescaleDBSettings, ExchangeSettings) — never imported; each service owns its config; shared config base deferred until a second service is built
 
 ---
 
