@@ -17,6 +17,7 @@ from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
 
 from nexus_ingestion.adapters.base import BaseAdapter
+from nexus_ingestion.config import NewsSourceType
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class NewsAdapter(BaseAdapter):
         self,
         source_name: str,
         source_url: str,
-        source_type: str = "rss",
+        source_type: NewsSourceType = NewsSourceType.RSS,
         *,
         poll_interval: int = 300,
         event_callback: Callable[[MarketEvent], Any] | None = None,
@@ -89,7 +90,7 @@ class NewsAdapter(BaseAdapter):
         if not self._session:
             return
 
-        if self._source_type == "rss":
+        if self._source_type == NewsSourceType.RSS:
             await self._poll_rss()
 
     async def _poll_rss(self) -> None:

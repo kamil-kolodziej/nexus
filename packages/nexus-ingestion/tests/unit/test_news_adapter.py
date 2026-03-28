@@ -16,6 +16,7 @@ from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
 
 from nexus_ingestion.adapters.news_adapter import NewsAdapter
+from nexus_ingestion.config import NewsSourceType
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def adapter(events: list[MarketEvent], alerts: list[HealthAlert]) -> NewsAdapter
     return NewsAdapter(
         source_name="test-rss",
         source_url="https://example.com/feed.xml",
-        source_type="rss",
+        source_type=NewsSourceType.RSS,
         poll_interval=10,
         event_callback=lambda e: events.append(e),
         health_callback=lambda a: alerts.append(a),

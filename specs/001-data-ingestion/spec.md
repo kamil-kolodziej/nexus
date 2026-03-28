@@ -53,7 +53,7 @@ As a strategy developer, I want news articles from external sources to flow into
 
 **Why this priority**: The platform design includes sentiment as a core signal source and sentiment strategies are one of the named strategy categories. However, strategies and probabilities can function with market data only, making this lower priority than the core price feed. Sentiment scoring itself is owned by the separate `nexus-sentiment` service.
 
-**Independent Test**: Configure at least one news source (e.g., NewsAPI or RSS feed), start the ingestion service, and observe `NewsArticle` events appearing in the `nexus:news-events` Redis Stream within the configured polling interval.
+**Independent Test**: Configure at least one RSS news source, start the ingestion service, and observe `NewsArticle` events appearing in the `nexus:news-events` Redis Stream within the configured polling interval.
 
 **Acceptance Scenarios**:
 
@@ -88,7 +88,7 @@ As a strategy developer, I want news articles from external sources to flow into
 - **FR-003**: The service MUST automatically reconnect to exchanges after WebSocket disconnection using exponential backoff without requiring a manual restart. Before each restart attempt the adapter MUST be stopped to release connections and reset internal state.
 - **FR-004**: Each adapter MUST run as an independent async task so that one adapter failing or disconnecting does not affect others.
 - **FR-005**: The service MUST expose a health endpoint reporting per-adapter status: connection state, last event timestamp, and event count.
-- **FR-006**: News adapters MUST fetch from at least one configurable source (RSS or NewsAPI) on a configurable polling interval and publish `NewsArticle` events to the Redis Stream.
+- **FR-006**: News adapters MUST fetch from at least one configurable RSS source on a configurable polling interval and publish `NewsArticle` events to the Redis Stream. Source type is validated at startup via `NewsSourceType` enum; unsupported types are rejected before any async work begins.
 - **FR-007**: The ingestion service is responsible only for publishing `NewsArticle` events to Redis. A separate `nexus-sentiment` service consumes `NewsArticle` events and publishes `SentimentScore` events with a score in `[-1.0, 1.0]` and a confidence value. (Sentiment service is specified separately.)
 - **FR-008**: The service MUST persist all published events to TimescaleDB asynchronously for historical replay and backtesting. Events MUST be published to Redis immediately; persistence to TimescaleDB happens in a background task with its own queue and retry logic. If TimescaleDB is unavailable, events remain in the background queue until it recovers; the Redis stream is unaffected.
 - **FR-009**: Malformed or unparseable event payloads MUST be logged and dropped without crashing the adapter.

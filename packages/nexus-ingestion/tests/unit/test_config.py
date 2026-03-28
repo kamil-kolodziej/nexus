@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
+import pydantic
+
 from nexus_ingestion.adapters.exchange_adapter import ExchangeAdapter
-from nexus_ingestion.config import IngestionConfig
+from nexus_ingestion.config import IngestionConfig, NewsSourceConfig
 
 # Fixture covering every TOML-mappable field with non-default values.
 _FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
@@ -93,6 +95,12 @@ def test_toml_credentials_ignored_and_warned(
     assert config.exchange_api_secret.get_secret_value() == ""
     assert "ignored" in caplog.text
     assert "SRC-003" in caplog.text
+
+
+def test_invalid_news_source_type_raises() -> None:
+    """Unsupported source type must fail at parse time, not silently do nothing."""
+    with pytest.raises(pydantic.ValidationError):
+        NewsSourceConfig(type="invalid")
 
 
 def test_exchange_adapter_keeps_explicit_empty_assets() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -15,11 +16,17 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
     import tomli as tomllib
 
 
+class NewsSourceType(str, Enum):
+    """Supported news source types."""
+
+    RSS = "rss"
+
+
 class NewsSourceConfig(BaseSettings):
     """Configuration for a single news source."""
 
     name: str = ""
-    type: str = "rss"
+    type: NewsSourceType = NewsSourceType.RSS
     url: str = ""
 
 
