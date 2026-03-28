@@ -79,8 +79,7 @@ asset=None
 **Problem**: Code defined but never called confuses readers and rots.
 
 Examples found:
-- `Payload` union type in `market_event.py` — defined but `MarketEvent.payload` is typed as `dict`
-- `validated_payload()` method — exists but never called anywhere
+- `validated_payload()` on `MarketEvent` — use this to get a typed payload object (`Tick`, `Candle`, etc.) in consumers; do not access `event.payload` as a raw dict in business logic
 
 **Fix**: Either wire it in or remove it. Dead code is a lie about what the system does.
 

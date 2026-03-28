@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from typing import Annotated, Literal, Union
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -107,19 +107,6 @@ class NewsArticle(BaseModel):
     published_at: datetime
     related_assets: list[str] = Field(default_factory=list)
 
-
-# --- Discriminated union payload type ---
-
-Payload = Annotated[
-    Union[
-        Annotated[Tick, "tick"],
-        Annotated[OrderBookUpdate, "orderbook"],
-        Annotated[Trade, "trade"],
-        Annotated[Candle, "candle"],
-        Annotated[NewsArticle, "news"],
-    ],
-    Field(discriminator=None),
-]
 
 # Map from EventType to payload class
 PAYLOAD_TYPE_MAP: dict[EventType, type[BaseModel]] = {
