@@ -24,6 +24,16 @@ Sync Impact Report
 	- ✅ README.md (reviewed; no change required)
 - Follow-up TODOs:
 	- TODO(COMMAND_TEMPLATES_DIR): Initialize .specify/templates/commands/ when command templates are added.
+
+Sync Impact Report
+- Version change: 1.0.0 -> 1.1.0
+- Modified principles:
+	- VI. Safety-Critical Test Coverage — expanded from safety-critical-only to universal test-first (TDD) requirement
+- Modified sections:
+	- Development Workflow & Quality Gates — lifecycle updated from test-after to test-first
+- Templates requiring updates:
+	- ⚠ pending: .specify/templates/tasks-template.md (task ordering should reflect test → implement pairs)
+	- ⚠ pending: docs/workflow.md (lifecycle diagram update)
 -->
 
 # Nexus Constitution
@@ -72,13 +82,23 @@ trace to explicit spec requirements, constraints, and success criteria.
 
 Rationale: Specs are living control documents, not throwaway planning artifacts.
 
-### VI. Safety-Critical Test Coverage
-Changes to risk manager logic, signal aggregation logic, execution safeguards, and
-inter-service contracts MUST include automated tests. Regression tests and property-based
-tests are mandatory for safety-critical logic; replay-based end-to-end tests are mandatory
-when changing trade or risk decision flow.
+### VI. Test-First Development
+Every implementation task MUST be preceded by tests that fail before the implementation
+exists. Tests define the expected behavior; implementation makes them pass. No production
+code may be written without a corresponding failing test already committed.
 
-Rationale: The highest-impact failures are logic regressions in decision and risk paths.
+Property-based tests (Hypothesis) are mandatory for data models and validation logic.
+Regression tests are mandatory for safety-critical logic (risk manager, signal aggregation,
+execution safeguards). Replay-based end-to-end tests are mandatory when changing trade or
+risk decision flow. Inter-service contracts MUST have snapshot tests (syrupy) updated in
+the same branch as any contract change.
+
+Exception: exploratory spikes are throwaway code exempt from this rule. A spike MUST NOT
+be promoted to production code — it must be reimplemented test-first.
+
+Rationale: Test-after consistently misses correctness issues that were discoverable upfront.
+Writing tests first forces interface design before implementation and makes assumptions
+explicit. The highest-impact failures are logic regressions in decision and risk paths.
 
 ### VII. Clear Service Boundaries
 Responsibilities MUST remain explicit across ingestion, strategy engine, aggregator,
@@ -100,7 +120,7 @@ capabilities expand.
 
 ## Development Workflow & Quality Gates
 
-- The default lifecycle is: specify -> plan -> tasks -> implement -> review -> test.
+- The default lifecycle is: specify -> plan -> tasks -> test (write failing tests) -> implement (make tests pass) -> review.
 - Every plan MUST include a Constitution Check and fail fast on unmet principles.
 - Every implementation branch MUST pass tests relevant to changed safety and contract
 	surfaces before merge.
@@ -129,4 +149,4 @@ Compliance review expectations:
 - Each PR review MUST verify test obligations for safety-critical and contract changes.
 - Periodic governance review MUST occur at least monthly and after any incident.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-20 | **Last Amended**: 2026-03-20
+**Version**: 1.1.0 | **Ratified**: 2026-03-20 | **Last Amended**: 2026-03-28
