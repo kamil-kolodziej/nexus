@@ -54,6 +54,7 @@ class NewsAdapter(BaseAdapter):
         self._seen_urls: OrderedDict[str, None] = OrderedDict()
         self._seen_urls_max = 10_000
         self._running = False
+        self._source_was_up: bool = True
 
     async def connect(self) -> None:
         """Create the aiohttp client session."""
@@ -103,6 +104,7 @@ class NewsAdapter(BaseAdapter):
                     await self._emit_source_down_alert()
                     return
                 body = await resp.text()
+                await self._emit_source_recovered_alert()
         except Exception as e:
             logger.warning("RSS fetch error for %s: %s", self._source_name, e)
             self.record_error()
@@ -168,16 +170,36 @@ class NewsAdapter(BaseAdapter):
             return None
 
     async def _emit_source_down_alert(self) -> None:
-        """Emit a NEWS_SOURCE_DOWN health alert."""
+        """Emit NEWS_SOURCE_DOWN once on the up→down transition; silent if already down."""
+        if not self._source_was_up:
+            return
+        self._source_was_up = False
         if not self._health_callback:
             return
-
         alert = HealthAlert(
             alert_type="NEWS_SOURCE_DOWN",
             adapter_id=self.adapter_id,
             severity=Severity.LOW,
             timestamp=datetime.now(timezone.utc),
             message=f"{self.adapter_id} fetch failed. Retrying next interval.",
+        )
+        result = self._health_callback(alert)
+        if asyncio.iscoroutine(result):
+            await result
+
+    async def _emit_source_recovered_alert(self) -> None:
+        """Emit NEWS_SOURCE_RECOVERED once on the down→up transition; silent if already up."""
+        if self._source_was_up:
+            return
+        self._source_was_up = True
+        if not self._health_callback:
+            return
+        alert = HealthAlert(
+            alert_type="NEWS_SOURCE_RECOVERED",
+            adapter_id=self.adapter_id,
+            severity=Severity.LOW,
+            timestamp=datetime.now(timezone.utc),
+            message=f"{self.adapter_id} fetch succeeded after previous failure.",
         )
         result = self._health_callback(alert)
         if asyncio.iscoroutine(result):

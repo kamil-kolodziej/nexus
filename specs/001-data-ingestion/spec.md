@@ -58,7 +58,7 @@ As a strategy developer, I want news articles from external sources to flow into
 **Acceptance Scenarios**:
 
 1. **Given** a news adapter is configured with a valid source, **When** a new article is fetched, **Then** a `NewsArticle` event with `source`, `asset` (if determinable), `timestamp`, `headline`, and `url` fields is published to the Redis Stream.
-2. **Given** the news source is unreachable, **When** a fetch attempt fails, **Then** the failure is logged, a health alert is emitted, and the adapter retries on the next polling interval without crashing the service.
+2. **Given** the news source is unreachable, **When** a fetch attempt fails for the first time (source was previously up), **Then** a `NEWS_SOURCE_DOWN` health alert is emitted exactly once; subsequent consecutive failures are silent. **When** the source recovers, a `NEWS_SOURCE_RECOVERED` alert is emitted once. The adapter retries on every polling interval without crashing the service.
 
 ---
 

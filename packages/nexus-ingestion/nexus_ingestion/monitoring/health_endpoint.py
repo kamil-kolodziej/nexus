@@ -75,3 +75,4 @@ class HealthEndpoint:
                 await asyncio.wait_for(self._task, timeout=5.0)
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 self._task.cancel()
+                await asyncio.gather(self._task, return_exceptions=True)

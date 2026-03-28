@@ -150,6 +150,57 @@ class TestHTTPFailureHandling:
         assert alerts[0].alert_type == "NEWS_SOURCE_DOWN"
 
 
+class TestAlertTransitions:
+    @pytest.mark.asyncio
+    async def test_source_down_emitted_once_on_first_failure(self, adapter: NewsAdapter, alerts: list) -> None:
+        """NEWS_SOURCE_DOWN must fire exactly once; repeated failures are silent."""
+        mock_session = _make_rss_session(status=503)
+        adapter._session = mock_session
+
+        await adapter._poll_rss()
+        await adapter._poll_rss()
+        await adapter._poll_rss()
+
+        assert len([a for a in alerts if a.alert_type == "NEWS_SOURCE_DOWN"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_source_recovered_emitted_after_failure(self, adapter: NewsAdapter, alerts: list) -> None:
+        """NEWS_SOURCE_RECOVERED must fire exactly once when fetch succeeds after a failure."""
+        feed = MagicMock()
+        feed.entries = []
+
+        # First poll — success (source starts up, no alert)
+        adapter._session = _make_rss_session(status=200)
+        with patch("nexus_ingestion.adapters.news_adapter.feedparser.parse", return_value=feed):
+            await adapter._poll_rss()
+        assert len(alerts) == 0
+
+        # Second poll — failure (DOWN alert emitted once)
+        adapter._session = _make_rss_session(status=503)
+        await adapter._poll_rss()
+        assert len([a for a in alerts if a.alert_type == "NEWS_SOURCE_DOWN"]) == 1
+
+        # Third poll — success (RECOVERED alert emitted)
+        adapter._session = _make_rss_session(status=200)
+        with patch("nexus_ingestion.adapters.news_adapter.feedparser.parse", return_value=feed):
+            await adapter._poll_rss()
+        assert len([a for a in alerts if a.alert_type == "NEWS_SOURCE_RECOVERED"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_alert_on_continued_success(self, adapter: NewsAdapter, alerts: list) -> None:
+        """No health alerts must be emitted when the source remains up across polls."""
+        feed = MagicMock()
+        feed.entries = []
+        adapter._session = _make_rss_session(status=200)
+
+        with patch("nexus_ingestion.adapters.news_adapter.feedparser.parse", return_value=feed):
+            await adapter._poll_rss()
+            await adapter._poll_rss()
+            await adapter._poll_rss()
+
+        assert len(alerts) == 0
+
+
 class TestNewsAdapterLifecycle:
     @pytest.mark.asyncio
     async def test_connect_creates_session(self, adapter: NewsAdapter) -> None:
