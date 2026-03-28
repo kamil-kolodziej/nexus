@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlparse, urlunparse
 
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_url(url: str) -> str:
+    """Strip credentials from a Redis URL for safe logging."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    netloc = f"{host}:{parsed.port}" if parsed.port else host
+    return urlunparse(parsed._replace(netloc=netloc))
 
 
 async def create_redis_client(
@@ -28,5 +37,5 @@ async def create_redis_client(
     )
     # Verify connectivity
     await client.ping()
-    logger.info("Redis connection established: %s", url)
+    logger.info("Redis connection established: %s", _sanitize_url(url))
     return client
