@@ -9,12 +9,11 @@ These tests validate MarketEvent + payload types respect constraints:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
 from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.market_event import (
     Candle,
@@ -24,7 +23,6 @@ from nexus_common.schemas.market_event import (
     Tick,
     Trade,
 )
-
 
 # --- Strategies ---
 
@@ -49,15 +47,19 @@ def orderbook_strategy(draw: st.DrawFn) -> OrderBookUpdate:
     ask_prices = sorted(draw(st.lists(positive_float, min_size=n, max_size=n)))
     bid_qtys = draw(st.lists(non_negative_float, min_size=n, max_size=n))
     ask_qtys = draw(st.lists(non_negative_float, min_size=n, max_size=n))
-    bids = [[p, q] for p, q in zip(bid_prices, bid_qtys)]
-    asks = [[p, q] for p, q in zip(ask_prices, ask_qtys)]
+    bids = [[p, q] for p, q in zip(bid_prices, bid_qtys, strict=False)]
+    asks = [[p, q] for p, q in zip(ask_prices, ask_qtys, strict=False)]
     return OrderBookUpdate(bids=bids, asks=asks, depth=n)
 
 
 @st.composite
 def trade_strategy(draw: st.DrawFn) -> Trade:
     return Trade(
-        trade_id=draw(st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N")))),
+        trade_id=draw(
+            st.text(
+                min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N"))
+            )
+        ),
         price=draw(positive_float),
         amount=draw(positive_float),
         side=draw(st.sampled_from(["buy", "sell"])),
@@ -69,12 +71,24 @@ def trade_strategy(draw: st.DrawFn) -> Trade:
 def candle_strategy(draw: st.DrawFn) -> Candle:
     o = draw(positive_float)
     c = draw(positive_float)
-    h = max(o, c) + draw(st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False))
-    l_ = min(o, c) - draw(st.floats(min_value=0.0, max_value=min(o, c) - 0.01 if min(o, c) > 0.01 else 0.0, allow_nan=False, allow_infinity=False))
+    h = max(o, c) + draw(
+        st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False)
+    )
+    l_ = min(o, c) - draw(
+        st.floats(
+            min_value=0.0,
+            max_value=min(o, c) - 0.01 if min(o, c) > 0.01 else 0.0,
+            allow_nan=False,
+            allow_infinity=False,
+        )
+    )
     if l_ <= 0:
         l_ = 0.01
     return Candle(
-        open=o, high=h, low=l_, close=c,
+        open=o,
+        high=h,
+        low=l_,
+        close=c,
         volume=draw(non_negative_float),
         timeframe=draw(st.sampled_from(["1m", "5m", "15m", "1h", "4h", "1d"])),
     )
@@ -178,7 +192,7 @@ class TestMarketEventProperties:
             MarketEvent(
                 source="test:exchange",
                 asset="BTC/USDT",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type=EventType.TICK,
                 schema_version="not-semver",
                 payload={"bid": 1.0, "ask": 2.0, "last": 1.5, "volume_24h": 0},
@@ -188,7 +202,7 @@ class TestMarketEventProperties:
         event = MarketEvent(
             source="test:exchange",
             asset="BTC/USDT",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=EventType.TICK,
             schema_version="1.0.0",
             payload={"bid": 1.0, "ask": 2.0, "last": 1.5, "volume_24h": 0},
@@ -199,7 +213,7 @@ class TestMarketEventProperties:
         event = MarketEvent(
             source="binance:exchange",
             asset="BTC/USDT",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=EventType.TICK,
             schema_version="1.0.0",
             payload={"bid": 100.0, "ask": 101.0, "last": 100.5, "volume_24h": 1000.0},
@@ -212,7 +226,7 @@ class TestMarketEventProperties:
         event = MarketEvent(
             source="binance:exchange",
             asset="BTC/USDT",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=EventType.TICK,
             schema_version="1.0.0",
             payload={"bid": 100.0, "ask": 101.0, "last": 100.5, "volume_24h": 1000.0},
@@ -228,7 +242,7 @@ class TestMarketEventProperties:
         original = MarketEvent(
             source="binance:exchange",
             asset="BTC/USDT",
-            timestamp=datetime(2026, 3, 22, 14, 30, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2026, 3, 22, 14, 30, 0, tzinfo=UTC),
             event_type=EventType.TICK,
             schema_version="1.0.0",
             payload={"bid": 100.0, "ask": 101.0, "last": 100.5, "volume_24h": 1000.0},
@@ -253,7 +267,7 @@ class TestNewsArticleProperties:
                 body_summary="x" * 1001,
                 url="https://example.com",
                 source_name="test",
-                published_at=datetime.now(timezone.utc),
+                published_at=datetime.now(UTC),
             )
 
     def test_valid_news_article(self) -> None:
@@ -262,7 +276,7 @@ class TestNewsArticleProperties:
             body_summary="Bitcoin prices reached...",
             url="https://example.com/article",
             source_name="coindesk",
-            published_at=datetime(2026, 3, 22, 10, 15, 0, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 22, 10, 15, 0, tzinfo=UTC),
             related_assets=["BTC/USDT"],
         )
         assert article.headline == "Bitcoin Surges"
@@ -276,7 +290,7 @@ class TestNewsArticleProperties:
                 body_summary="",
                 url="not-a-url",
                 source_name="test",
-                published_at=datetime.now(timezone.utc),
+                published_at=datetime.now(UTC),
             )
 
     def test_http_url_accepted(self) -> None:
@@ -285,6 +299,6 @@ class TestNewsArticleProperties:
             body_summary="",
             url="http://example.com/article",
             source_name="test",
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
         )
         assert article.url == "http://example.com/article"

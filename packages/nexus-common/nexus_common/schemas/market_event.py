@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-_URL_RE = re.compile(r"^https?://\S+", re.IGNORECASE)
-
 from nexus_common.schemas.enums import EventType
 
+_URL_RE = re.compile(r"^https?://\S+", re.IGNORECASE)
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
@@ -140,7 +139,7 @@ class MarketEvent(BaseModel):
     timestamp: datetime
     event_type: EventType
     schema_version: str = "1.0.0"
-    payload: dict
+    payload: dict[str, object]
 
     @field_validator("schema_version")
     @classmethod
@@ -154,7 +153,7 @@ class MarketEvent(BaseModel):
     @classmethod
     def ensure_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
+            return v.replace(tzinfo=UTC)
         return v
 
     def validated_payload(self) -> BaseModel:

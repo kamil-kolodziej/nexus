@@ -42,7 +42,7 @@ class HealthEndpoint:
         self._host = host
         self._app = create_health_app()
         self._server: uvicorn.Server | None = None
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     @property
     def app(self) -> FastAPI:
@@ -61,9 +61,7 @@ class HealthEndpoint:
             log_level="warning",
         )
         self._server = uvicorn.Server(config)
-        self._task = asyncio.create_task(
-            self._server.serve(), name="health-endpoint"
-        )
+        self._task = asyncio.create_task(self._server.serve(), name="health-endpoint")
         logger.info("Health endpoint started on port %d", self._port)
 
     async def stop(self) -> None:
@@ -73,6 +71,6 @@ class HealthEndpoint:
         if self._task and not self._task.done():
             try:
                 await asyncio.wait_for(self._task, timeout=5.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 self._task.cancel()
                 await asyncio.gather(self._task, return_exceptions=True)

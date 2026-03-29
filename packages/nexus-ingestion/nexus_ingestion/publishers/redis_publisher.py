@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -17,7 +17,7 @@ class RedisPublisher:
 
     def __init__(
         self,
-        redis: Redis,
+        redis: Redis[Any],
         stream: str,
         maxlen: int = 100000,
         buffer_max: int = 10000,
@@ -52,7 +52,7 @@ class RedisPublisher:
                 maxlen=self._maxlen,
                 approximate=True,
             )
-            return entry_id
+            return cast(str, entry_id)
         except Exception:
             logger.warning(
                 "Redis publish failed, buffering event (buffer: %d)",
@@ -93,7 +93,7 @@ class RedisPublisher:
             logger.error("Buffer flush failed, %d events remain", len(self._buffer))
             return 0
 
-    async def reconnect(self, redis: Redis) -> None:
+    async def reconnect(self, redis: Redis[Any]) -> None:
         """Update the Redis client after reconnection and flush buffer."""
         self._redis = redis
         self._connected = True

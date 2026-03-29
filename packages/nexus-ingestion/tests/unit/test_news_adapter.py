@@ -5,16 +5,12 @@ Tests RSS normalization, HTTP failure handling, dedup, and NEWS_SOURCE_DOWN aler
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
-
 from nexus_ingestion.adapters.news_adapter import NewsAdapter
 from nexus_ingestion.config import NewsSourceType
 
@@ -104,7 +100,9 @@ class TestDedup:
         assert len(events) == 1  # second poll must not re-emit the same URL
 
     @pytest.mark.asyncio
-    async def test_lru_eviction_allows_reemit_after_cap(self, adapter: NewsAdapter, events: list) -> None:
+    async def test_lru_eviction_allows_reemit_after_cap(
+        self, adapter: NewsAdapter, events: list
+    ) -> None:
         """Once the cap is exceeded, the oldest URL is evicted and may be re-emitted."""
         adapter._seen_urls_max = 2
 
@@ -152,7 +150,9 @@ class TestHTTPFailureHandling:
 
 class TestAlertTransitions:
     @pytest.mark.asyncio
-    async def test_source_down_emitted_once_on_first_failure(self, adapter: NewsAdapter, alerts: list) -> None:
+    async def test_source_down_emitted_once_on_first_failure(
+        self, adapter: NewsAdapter, alerts: list
+    ) -> None:
         """NEWS_SOURCE_DOWN must fire exactly once; repeated failures are silent."""
         mock_session = _make_rss_session(status=503)
         adapter._session = mock_session
@@ -164,7 +164,9 @@ class TestAlertTransitions:
         assert len([a for a in alerts if a.alert_type == "NEWS_SOURCE_DOWN"]) == 1
 
     @pytest.mark.asyncio
-    async def test_source_recovered_emitted_after_failure(self, adapter: NewsAdapter, alerts: list) -> None:
+    async def test_source_recovered_emitted_after_failure(
+        self, adapter: NewsAdapter, alerts: list
+    ) -> None:
         """NEWS_SOURCE_RECOVERED must fire exactly once when fetch succeeds after a failure."""
         feed = MagicMock()
         feed.entries = []

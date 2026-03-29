@@ -5,3 +5,61 @@ testpaths = [
     "packages/nexus-common/tests",
     "packages/nexus-ingestion/tests",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "S",    # flake8-bandit (security)
+    "ASYNC",# flake8-async (asyncio correctness)
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "S101",  # assert statements — used in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "B", "ASYNC"]  # relax security/bugbear/async rules in test files
+"**/adapters/exchange_adapter.py" = ["B008"]  # SecretStr("") defaults are intentional
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+show_error_codes = true
+explicit_package_bases = true
+# pydantic plugin for model-aware type checking
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "aiohttp.*",
+    "asyncpg.*",
+    "ccxt.*",
+    "ccxt.pro.*",
+    "feedparser.*",
+    "tomli.*",
+    "uvicorn.*",
+    "uvloop.*",
+    "testcontainers.*",
+]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = [
+    "B101",  # assert — used in tests
+    "B603",  # subprocess without shell — ccxt uses this internally
+]
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "test_*.py"]

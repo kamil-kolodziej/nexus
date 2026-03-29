@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from nexus_common.schemas.health_alert import HealthAlert
 
@@ -21,7 +21,7 @@ class HealthPublisher:
 
     def __init__(
         self,
-        redis: Redis,
+        redis: Redis[Any],
         stream: str = HEALTH_STREAM,
         maxlen: int = HEALTH_MAXLEN,
     ) -> None:
@@ -44,7 +44,7 @@ class HealthPublisher:
                 alert.severity,
                 alert.adapter_id,
             )
-            return entry_id
+            return cast(str, entry_id)
         except Exception:
             logger.error(
                 "Failed to publish health alert: %s %s",

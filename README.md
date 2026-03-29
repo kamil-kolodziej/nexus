@@ -91,6 +91,12 @@ Modes: historical replay, walk-forward analysis, Monte Carlo simulation, paramet
 pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev]
 ```
 
+**Set up pre-commit hooks (run once after cloning):**
+```bash
+pip install pre-commit
+pre-commit install
+```
+
 **Run all tests:**
 ```bash
 pytest

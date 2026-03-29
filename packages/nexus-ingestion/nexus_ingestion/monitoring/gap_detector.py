@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from nexus_common.schemas.enums import Severity
 from nexus_common.schemas.health_alert import HealthAlert
@@ -31,7 +32,7 @@ class GapDetector:
         self._last_event_times: dict[str, datetime] = {}
         self._malformed_counts: dict[str, list[datetime]] = {}
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the gap detection background loop."""
@@ -52,11 +53,11 @@ class GapDetector:
     def record_event(self, adapter_id: str, asset: str) -> None:
         """Update the last-event timestamp for an adapter+asset pair."""
         key = f"{adapter_id}:{asset}"
-        self._last_event_times[key] = datetime.now(timezone.utc)
+        self._last_event_times[key] = datetime.now(UTC)
 
     def record_malformed(self, adapter_id: str) -> None:
         """Track a malformed event for rate monitoring."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if adapter_id not in self._malformed_counts:
             self._malformed_counts[adapter_id] = []
         self._malformed_counts[adapter_id].append(now)
@@ -75,7 +76,7 @@ class GapDetector:
 
     async def _check_gaps(self) -> None:
         """Check all tracked assets for data gaps."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for key, last_time in list(self._last_event_times.items()):
             gap_seconds = (now - last_time).total_seconds()
             if gap_seconds > self._gap_threshold:
@@ -98,7 +99,7 @@ class GapDetector:
 
     async def _check_malformed_rates(self) -> None:
         """Check malformed event rates per adapter."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for adapter_id, timestamps in list(self._malformed_counts.items()):
             # Keep only last 60 seconds
             cutoff = now.timestamp() - 60

@@ -6,12 +6,12 @@ import asyncio
 import logging
 from calendar import timegm
 from collections import OrderedDict
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import aiohttp
 import feedparser
-
 from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
@@ -96,10 +96,15 @@ class NewsAdapter(BaseAdapter):
 
     async def _poll_rss(self) -> None:
         """Fetch and parse an RSS feed."""
+        assert self._session is not None
         try:
-            async with self._session.get(self._source_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with self._session.get(
+                self._source_url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
                 if resp.status != 200:
-                    logger.warning("RSS fetch failed: HTTP %d from %s", resp.status, self._source_url)
+                    logger.warning(
+                        "RSS fetch failed: HTTP %d from %s", resp.status, self._source_url
+                    )
                     self.record_error()
                     await self._emit_source_down_alert()
                     return
@@ -146,14 +151,14 @@ class NewsAdapter(BaseAdapter):
             # Parse published date
             published_parsed = getattr(entry, "published_parsed", None)
             if published_parsed:
-                published_at = datetime.fromtimestamp(timegm(published_parsed), tz=timezone.utc)
+                published_at = datetime.fromtimestamp(timegm(published_parsed), tz=UTC)
             else:
-                published_at = datetime.now(timezone.utc)
+                published_at = datetime.now(UTC)
 
             return MarketEvent(
                 source=self.adapter_id,
                 asset=None,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type=EventType.NEWS_ARTICLE,
                 payload={
                     "headline": headline,
@@ -180,7 +185,7 @@ class NewsAdapter(BaseAdapter):
             alert_type="NEWS_SOURCE_DOWN",
             adapter_id=self.adapter_id,
             severity=Severity.LOW,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             message=f"{self.adapter_id} fetch failed. Retrying next interval.",
         )
         result = self._health_callback(alert)
@@ -198,7 +203,7 @@ class NewsAdapter(BaseAdapter):
             alert_type="NEWS_SOURCE_RECOVERED",
             adapter_id=self.adapter_id,
             severity=Severity.LOW,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             message=f"{self.adapter_id} fetch succeeded after previous failure.",
         )
         result = self._health_callback(alert)

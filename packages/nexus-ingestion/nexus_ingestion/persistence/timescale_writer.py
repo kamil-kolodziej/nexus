@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import asyncpg
-
 from nexus_common.schemas.enums import Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
@@ -36,16 +36,18 @@ class TimescaleWriter:
         self._health_callback = health_callback
         self._pool: asyncpg.Pool | None = None
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Initialize connection pool and start the background writer task."""
-        self._pool = await asyncpg.create_pool(
-            self._dsn, min_size=2, max_size=5
-        )
+        self._pool = await asyncpg.create_pool(self._dsn, min_size=2, max_size=5)
         self._running = True
         self._task = asyncio.create_task(self._writer_loop(), name="timescale-writer")
-        logger.info("TimescaleWriter started (batch=%d, interval=%.1fs)", self._batch_size, self._flush_interval)
+        logger.info(
+            "TimescaleWriter started (batch=%d, interval=%.1fs)",
+            self._batch_size,
+            self._flush_interval,
+        )
 
     async def stop(self) -> None:
         """Flush remaining events and shut down."""
@@ -81,11 +83,9 @@ class TimescaleWriter:
             try:
                 # Wait for events with timeout
                 try:
-                    event = await asyncio.wait_for(
-                        self._queue.get(), timeout=self._flush_interval
-                    )
+                    event = await asyncio.wait_for(self._queue.get(), timeout=self._flush_interval)
                     batch.append(event)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
 
                 # Drain queue up to batch size
@@ -135,7 +135,14 @@ class TimescaleWriter:
                     await conn.copy_records_to_table(
                         "market_events",
                         records=records,
-                        columns=["time", "source", "asset", "event_type", "payload", "schema_version"],
+                        columns=[
+                            "time",
+                            "source",
+                            "asset",
+                            "event_type",
+                            "payload",
+                            "schema_version",
+                        ],
                     )
                 logger.debug("Wrote %d records to TimescaleDB", len(records))
                 return
@@ -180,7 +187,7 @@ class TimescaleWriter:
             alert_type="PERSISTENCE_ERROR",
             adapter_id="timescale-writer",
             severity=Severity.MEDIUM,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             message=f"TimescaleDB batch write failed: {error_msg}. Queue depth: {queue_depth}",
         )
         result = self._health_callback(alert)

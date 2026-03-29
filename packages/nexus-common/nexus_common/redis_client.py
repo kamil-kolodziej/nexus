@@ -26,10 +26,10 @@ async def create_redis_client(
     decode_responses: bool = True,
     retry_on_timeout: bool = True,
     max_retries: int = 3,
-) -> Redis:
+) -> Redis[str]:
     """Create an async Redis client with exponential backoff retry."""
     retry = Retry(ExponentialBackoff(), retries=max_retries)
-    client = Redis.from_url(
+    client: Redis[str] = Redis.from_url(  # type: ignore[call-overload]
         url,
         decode_responses=decode_responses,
         retry_on_timeout=retry_on_timeout,

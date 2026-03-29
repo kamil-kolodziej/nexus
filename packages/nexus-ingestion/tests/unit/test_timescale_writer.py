@@ -5,15 +5,12 @@ Tests queue behavior, batch flush on size + timer, error retry, QueueFull drop.
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.market_event import MarketEvent
-
 from nexus_ingestion.persistence.timescale_writer import TimescaleWriter
 
 
@@ -21,7 +18,7 @@ def _make_event(n: int = 0) -> MarketEvent:
     return MarketEvent(
         source="test:exchange",
         asset="BTC/USDT",
-        timestamp=datetime(2026, 3, 22, 14, 30, n % 60, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 3, 22, 14, 30, n % 60, tzinfo=UTC),
         event_type=EventType.TICK,
         schema_version="1.0.0",
         payload={"bid": 100.0 + n, "ask": 101.0 + n, "last": 100.5 + n, "volume_24h": 0},

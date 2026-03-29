@@ -7,13 +7,13 @@ Uses syrupy for snapshot testing.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.market_event import MarketEvent
 
 # Fixed timestamp for reproducible snapshots
-FIXED_TS = datetime(2026, 3, 22, 14, 30, 0, 123000, tzinfo=timezone.utc)
+FIXED_TS = datetime(2026, 3, 22, 14, 30, 0, 123000, tzinfo=UTC)
 
 
 class TestMarketEventContracts:

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import pydantic
-
+import pytest
 from nexus_ingestion.adapters.exchange_adapter import ExchangeAdapter
 from nexus_ingestion.config import IngestionConfig, NewsSourceConfig
 
@@ -88,6 +86,7 @@ def test_toml_credentials_ignored_and_warned(
     monkeypatch.setenv("NEXUS_CONFIG_FILE", str(config_file))
 
     import logging
+
     with caplog.at_level(logging.WARNING):
         config = IngestionConfig()
 

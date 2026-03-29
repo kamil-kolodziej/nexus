@@ -6,17 +6,13 @@ read-only access (SRC-001), and malformed payload handling.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import time
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from nexus_common.schemas.enums import AdapterStatus, EventType
 from nexus_common.schemas.market_event import MarketEvent
-
 from nexus_ingestion.adapters.exchange_adapter import ExchangeAdapter
 
 
@@ -37,7 +33,13 @@ def adapter() -> ExchangeAdapter:
 class TestTickNormalization:
     def test_valid_ticker_produces_tick_event(self, adapter: ExchangeAdapter) -> None:
         ts_ms = int(time.time() * 1000)
-        ticker = {"bid": 67234.50, "ask": 67235.10, "last": 67234.80, "quoteVolume": 12345.67, "timestamp": ts_ms}
+        ticker = {
+            "bid": 67234.50,
+            "ask": 67235.10,
+            "last": 67234.80,
+            "quoteVolume": 12345.67,
+            "timestamp": ts_ms,
+        }
         event = adapter._normalize_tick("BTC/USDT", ticker)
         assert event is not None
         assert event.event_type == EventType.TICK
@@ -76,14 +78,27 @@ class TestOrderBookNormalization:
 class TestTradeNormalization:
     def test_valid_trade(self, adapter: ExchangeAdapter) -> None:
         ts_ms = int(time.time() * 1000)
-        trade = {"id": "12345", "price": 67234.80, "amount": 0.15, "side": "buy", "takerOrMaker": "taker", "timestamp": ts_ms}
+        trade = {
+            "id": "12345",
+            "price": 67234.80,
+            "amount": 0.15,
+            "side": "buy",
+            "takerOrMaker": "taker",
+            "timestamp": ts_ms,
+        }
         event = adapter._normalize_trade("BTC/USDT", trade)
         assert event is not None
         assert event.event_type == EventType.TRADE
         assert event.payload["trade_id"] == "12345"
 
     def test_zero_price_trade_returns_none(self, adapter: ExchangeAdapter) -> None:
-        trade = {"id": "1", "price": 0, "amount": 1.0, "side": "buy", "timestamp": int(time.time() * 1000)}
+        trade = {
+            "id": "1",
+            "price": 0,
+            "amount": 1.0,
+            "side": "buy",
+            "timestamp": int(time.time() * 1000),
+        }
         event = adapter._normalize_trade("BTC/USDT", trade)
         assert event is None
 
@@ -144,7 +159,13 @@ class TestCredentialHandling:
 class TestTimestampTolerance:
     def test_old_timestamp_rejected(self, adapter: ExchangeAdapter) -> None:
         old_ts_ms = int((time.time() - 300) * 1000)  # 5 minutes ago
-        ticker = {"bid": 100.0, "ask": 101.0, "last": 100.5, "quoteVolume": 0, "timestamp": old_ts_ms}
+        ticker = {
+            "bid": 100.0,
+            "ask": 101.0,
+            "last": 100.5,
+            "quoteVolume": 0,
+            "timestamp": old_ts_ms,
+        }
         event = adapter._normalize_tick("BTC/USDT", ticker)
         assert event is None
 
@@ -158,7 +179,9 @@ class TestTimestampTolerance:
 class TestMalformedPayloadHandling:
     def test_malformed_count_increments(self, adapter: ExchangeAdapter) -> None:
         adapter._normalize_tick("BTC/USDT", {})
-        adapter._normalize_tick("BTC/USDT", {"bid": None, "ask": None, "last": None, "timestamp": None})
+        adapter._normalize_tick(
+            "BTC/USDT", {"bid": None, "ask": None, "last": None, "timestamp": None}
+        )
         assert adapter._malformed_count >= 2
 
 
@@ -180,7 +203,6 @@ class TestReconnectionStateTransitions:
         assert adapter.status == AdapterStatus.CONNECTED
 
         # Simulate NetworkError handling
-        from unittest.mock import MagicMock
 
         mock_error = MagicMock()
         mock_error.__class__.__name__ = "NetworkError"
@@ -247,7 +269,10 @@ class TestReconnectionStateTransitions:
 
     @pytest.mark.asyncio
     async def test_per_stream_counters_are_independent(self) -> None:
-        """Two streams failing simultaneously must each get their own counter — regression guard for Bug 3."""
+        """Two streams failing simultaneously must each get their own counter.
+
+        Regression guard for Bug 3.
+        """
         adapter = ExchangeAdapter("binance", sandbox=True, max_reconnect_attempts=10)
         adapter.status = AdapterStatus.RECONNECTING
 

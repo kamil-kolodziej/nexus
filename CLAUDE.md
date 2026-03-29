@@ -55,6 +55,17 @@ All defined in `nexus-common` and shared across packages:
 pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev]
 ```
 
+**Set up pre-commit hooks (once after cloning):**
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+**Run pre-commit manually against all files:**
+```bash
+pre-commit run --all-files
+```
+
 **Run all tests:**
 ```bash
 pytest

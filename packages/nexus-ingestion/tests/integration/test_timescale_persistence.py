@@ -7,13 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.market_event import MarketEvent
-
 from nexus_ingestion.persistence.timescale_writer import TimescaleWriter
 
 try:
@@ -23,9 +21,7 @@ try:
 except ImportError:
     HAS_TESTCONTAINERS = False
 
-pytestmark = pytest.mark.skipif(
-    not HAS_TESTCONTAINERS, reason="testcontainers not available"
-)
+pytestmark = pytest.mark.skipif(not HAS_TESTCONTAINERS, reason="testcontainers not available")
 
 SCHEMA_SQL = """
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -47,7 +43,7 @@ def _make_event(n: int = 0) -> MarketEvent:
     return MarketEvent(
         source="binance:exchange",
         asset="BTC/USDT",
-        timestamp=datetime(2026, 3, 22, 14, 30, n % 60, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 3, 22, 14, 30, n % 60, tzinfo=UTC),
         event_type=EventType.TICK,
         schema_version="1.0.0",
         payload={"bid": 100.0 + n, "ask": 101.0 + n, "last": 100.5 + n, "volume_24h": float(n)},
@@ -130,7 +126,9 @@ class TestTimescaleDBPersistence:
 
         conn = await asyncpg.connect(dsn)
         try:
-            count = await conn.fetchval("SELECT COUNT(*) FROM market_events WHERE (payload->>'volume_24h')::float >= 10")
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM market_events WHERE (payload->>'volume_24h')::float >= 10"
+            )
             assert count == 5
         finally:
             await conn.close()

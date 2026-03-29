@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
@@ -35,15 +36,15 @@ class IngestionService:
     def __init__(self, config: IngestionConfig) -> None:
         self._config = config
         self._adapters: dict[str, BaseAdapter] = {}
-        self._tasks: dict[str, asyncio.Task] = {}
+        self._tasks: dict[str, asyncio.Task[None]] = {}
         self._restart_counts: dict[str, int] = {}
         self._restart_handles: dict[str, asyncio.TimerHandle] = {}
-        self._restart_tasks: dict[str, asyncio.Task] = {}
+        self._restart_tasks: dict[str, asyncio.Task[None]] = {}
         self._running = False
         self._event_callback: Callable[[Any], Any] | None = None
 
         # Components wired during setup
-        self._redis: Redis | None = None
+        self._redis: Redis[Any] | None = None
         self._market_publisher: RedisPublisher | None = None
         self._news_publisher: RedisPublisher | None = None
         self._health_publisher: HealthPublisher | None = None
@@ -62,7 +63,7 @@ class IngestionService:
 
     def set_publishers(
         self,
-        redis: Redis,
+        redis: Redis[Any],
         market_publisher: RedisPublisher,
         health_publisher: HealthPublisher,
         news_publisher: RedisPublisher | None = None,
@@ -114,10 +115,8 @@ class IngestionService:
                         alert_type="PERSISTENCE_ERROR",
                         adapter_id=event.source,
                         severity=Severity.MEDIUM,
-                        timestamp=datetime.now(timezone.utc),
-                        message=(
-                            f"TimescaleDB queue full — event dropped for {event.source}"
-                        ),
+                        timestamp=datetime.now(UTC),
+                        message=(f"TimescaleDB queue full — event dropped for {event.source}"),
                     )
                 )
 
@@ -151,19 +150,13 @@ class IngestionService:
         # Start adapters
         for adapter_id, adapter in self._adapters.items():
             self._start_adapter_task(adapter_id, adapter)
-        logger.info(
-            "IngestionService started with %d adapter(s)", len(self._adapters)
-        )
+        logger.info("IngestionService started with %d adapter(s)", len(self._adapters))
 
     def _start_adapter_task(self, adapter_id: str, adapter: BaseAdapter) -> None:
         """Create a task for an adapter and attach failure callback."""
-        task = asyncio.create_task(
-            self._run_adapter(adapter), name=f"adapter:{adapter_id}"
-        )
+        task = asyncio.create_task(self._run_adapter(adapter), name=f"adapter:{adapter_id}")
         self._tasks[adapter_id] = task
-        task.add_done_callback(
-            lambda t, aid=adapter_id: self._on_adapter_done(aid, t)
-        )
+        task.add_done_callback(lambda t: self._on_adapter_done(adapter_id, t))
 
     async def _run_adapter(self, adapter: BaseAdapter) -> None:
         """Run an adapter's full lifecycle."""
@@ -171,7 +164,7 @@ class IngestionService:
         await adapter.subscribe()
         await adapter.run()
 
-    def _on_adapter_done(self, adapter_id: str, task: asyncio.Task) -> None:
+    def _on_adapter_done(self, adapter_id: str, task: asyncio.Task[None]) -> None:
         """Callback when an adapter task completes (normally or via exception)."""
         if not self._running:
             return
@@ -227,11 +220,9 @@ class IngestionService:
                 name=f"restart:{adapter_id}",
             )
             self._restart_tasks[adapter_id] = task
-            task.add_done_callback(
-                lambda t, aid=adapter_id: self._on_restart_done(aid, t)
-            )
+            task.add_done_callback(lambda t: self._on_restart_done(adapter_id, t))
 
-    def _on_restart_done(self, adapter_id: str, task: asyncio.Task) -> None:
+    def _on_restart_done(self, adapter_id: str, task: asyncio.Task[None]) -> None:
         """Log any exception that escapes the restart coroutine."""
         self._restart_tasks.pop(adapter_id, None)
         if task.cancelled():
@@ -278,9 +269,7 @@ class IngestionService:
             try:
                 await adapter.stop()
             except Exception:
-                logger.warning(
-                    "Error stopping adapter %s", adapter.adapter_id, exc_info=True
-                )
+                logger.warning("Error stopping adapter %s", adapter.adapter_id, exc_info=True)
 
         # Cancel all tasks
         for task in self._tasks.values():
@@ -301,6 +290,6 @@ class IngestionService:
         if self._timescale_writer:
             await self._timescale_writer.stop()
         if self._redis:
-            await self._redis.aclose()
+            await self._redis.aclose()  # type: ignore[attr-defined]
 
         logger.info("IngestionService stopped")

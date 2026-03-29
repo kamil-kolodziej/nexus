@@ -13,7 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore[no-redef]
 
 
 class NewsSourceType(str, Enum):
@@ -105,15 +105,13 @@ class IngestionConfig(BaseSettings):
         with config_path.open("rb") as fh:
             raw = tomllib.load(fh)
 
-        if not isinstance(raw, dict):
-            return {}
-
         settings: dict[str, Any] = {}
 
         exchange = raw.get("exchange")
         if isinstance(exchange, dict):
             if "api_key" in exchange or "api_secret" in exchange:
                 import logging as _log
+
                 _log.getLogger(__name__).warning(
                     "Credentials found in TOML config are ignored. "
                     "Set NEXUS_EXCHANGE_API_KEY and NEXUS_EXCHANGE_API_SECRET "

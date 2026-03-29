@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
-
-from pydantic import SecretStr
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from nexus_common.schemas.enums import AdapterStatus, EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
+from pydantic import SecretStr
 
 from nexus_ingestion.adapters.base import BaseAdapter
 
@@ -89,9 +89,15 @@ class ExchangeAdapter(BaseAdapter):
         self._running = True
         tasks = []
         for asset in self._assets:
-            tasks.append(asyncio.create_task(self._watch_ticker(asset), name=f"watch_ticker:{asset}"))
-            tasks.append(asyncio.create_task(self._watch_order_book(asset), name=f"watch_order_book:{asset}"))
-            tasks.append(asyncio.create_task(self._watch_trades(asset), name=f"watch_trades:{asset}"))
+            tasks.append(
+                asyncio.create_task(self._watch_ticker(asset), name=f"watch_ticker:{asset}")
+            )
+            tasks.append(
+                asyncio.create_task(self._watch_order_book(asset), name=f"watch_order_book:{asset}")
+            )
+            tasks.append(
+                asyncio.create_task(self._watch_trades(asset), name=f"watch_trades:{asset}")
+            )
             tasks.append(asyncio.create_task(self._watch_ohlcv(asset), name=f"watch_ohlcv:{asset}"))
 
         if tasks:
@@ -168,7 +174,7 @@ class ExchangeAdapter(BaseAdapter):
             except Exception as e:
                 await self._handle_watch_error("watch_ohlcv", asset, e)
 
-    def _normalize_tick(self, asset: str, ticker: dict) -> MarketEvent | None:
+    def _normalize_tick(self, asset: str, ticker: dict[str, Any]) -> MarketEvent | None:
         """Normalize ccxt ticker to MarketEvent with Tick payload."""
         try:
             bid = ticker.get("bid")
@@ -197,7 +203,7 @@ class ExchangeAdapter(BaseAdapter):
             logger.debug("Failed to normalize tick for %s", asset, exc_info=True)
             return None
 
-    def _normalize_order_book(self, asset: str, ob: dict) -> MarketEvent | None:
+    def _normalize_order_book(self, asset: str, ob: dict[str, Any]) -> MarketEvent | None:
         """Normalize ccxt order book to MarketEvent."""
         try:
             bids = ob.get("bids", [])[:10]
@@ -225,14 +231,14 @@ class ExchangeAdapter(BaseAdapter):
             logger.debug("Failed to normalize order book for %s", asset, exc_info=True)
             return None
 
-    def _normalize_trade(self, asset: str, trade: dict) -> MarketEvent | None:
+    def _normalize_trade(self, asset: str, trade: dict[str, Any]) -> MarketEvent | None:
         """Normalize ccxt trade to MarketEvent."""
         try:
             price = trade.get("price")
             amount = trade.get("amount")
             side = trade.get("side")
 
-            if not all(v is not None for v in (price, amount, side)):
+            if price is None or amount is None or side is None:
                 self.record_malformed()
                 return None
 
@@ -263,7 +269,7 @@ class ExchangeAdapter(BaseAdapter):
             logger.debug("Failed to normalize trade for %s", asset, exc_info=True)
             return None
 
-    def _normalize_candle(self, asset: str, ohlcv: list) -> MarketEvent | None:
+    def _normalize_candle(self, asset: str, ohlcv: list[Any]) -> MarketEvent | None:
         """Normalize ccxt OHLCV array [ts, o, h, l, c, v] to MarketEvent."""
         try:
             if len(ohlcv) < 6:
@@ -306,8 +312,8 @@ class ExchangeAdapter(BaseAdapter):
             return None
 
         try:
-            dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-            now = datetime.now(timezone.utc)
+            dt = datetime.fromtimestamp(ts / 1000, tz=UTC)
+            now = datetime.now(UTC)
             diff = abs((now - dt).total_seconds())
             if diff > self._timestamp_tolerance:
                 logger.debug(
@@ -330,7 +336,7 @@ class ExchangeAdapter(BaseAdapter):
         try:
             from ccxt.base.errors import ExchangeNotAvailable, NetworkError
 
-            if isinstance(error, (NetworkError, ExchangeNotAvailable)):
+            if isinstance(error, NetworkError | ExchangeNotAvailable):
                 if self.status == AdapterStatus.CONNECTED:
                     self._stream_reconnect_attempts[stream_key] = 1
                     await self._transition_to_reconnecting()
@@ -353,7 +359,7 @@ class ExchangeAdapter(BaseAdapter):
                 alert_type="ADAPTER_RECONNECTING",
                 adapter_id=self.adapter_id,
                 severity=Severity.MEDIUM,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 message=f"{self.adapter_id} WebSocket disconnected, starting reconnection",
             )
             result = self._health_callback(alert)
@@ -371,7 +377,7 @@ class ExchangeAdapter(BaseAdapter):
                     alert_type="ADAPTER_DOWN",
                     adapter_id=self.adapter_id,
                     severity=Severity.HIGH,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     message=(
                         f"{self.adapter_id} entered DOWN state after "
                         f"{attempts} reconnection attempts"
@@ -391,7 +397,7 @@ class ExchangeAdapter(BaseAdapter):
                 alert_type="ADAPTER_RECOVERED",
                 adapter_id=self.adapter_id,
                 severity=Severity.LOW,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 message=f"{self.adapter_id} reconnected successfully",
             )
             result = self._health_callback(alert)
@@ -400,4 +406,4 @@ class ExchangeAdapter(BaseAdapter):
 
     def _get_reconnect_delay(self, attempt: int) -> float:
         """Calculate exponential backoff delay for reconnection."""
-        return min(1.0 * (2 ** attempt), 60.0)
+        return float(min(1.0 * (2**attempt), 60.0))

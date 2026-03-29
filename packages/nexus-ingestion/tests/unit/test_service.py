@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.market_event import MarketEvent
@@ -190,7 +188,7 @@ class TestHandleEventRouting:
         return MarketEvent(
             source="binance:exchange",
             asset=asset,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=event_type,
             payload={"bid": 1.0, "ask": 1.1, "last": 1.05, "volume_24h": 100.0},
         )
@@ -227,7 +225,7 @@ class TestEnqueueFullEmitsHealthAlert:
         return MarketEvent(
             source="binance:exchange",
             asset="BTC/USDT",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=EventType.TICK,
             payload={"bid": 1.0, "ask": 1.1, "last": 1.05, "volume_24h": 100.0},
         )

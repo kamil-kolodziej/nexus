@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-import sys
 
 from nexus_common.redis_client import create_redis_client
 
@@ -43,13 +42,21 @@ async def run() -> None:
 
     # Create publishers
     market_publisher = RedisPublisher(
-        redis, config.market_events_stream, maxlen=config.market_events_maxlen, buffer_max=config.redis_buffer_max,
+        redis,
+        config.market_events_stream,
+        maxlen=config.market_events_maxlen,
+        buffer_max=config.redis_buffer_max,
     )
     news_publisher = RedisPublisher(
-        redis, config.news_events_stream, maxlen=config.news_events_maxlen, buffer_max=config.redis_buffer_max,
+        redis,
+        config.news_events_stream,
+        maxlen=config.news_events_maxlen,
+        buffer_max=config.redis_buffer_max,
     )
     health_publisher = HealthPublisher(
-        redis, config.health_events_stream, maxlen=config.health_events_maxlen,
+        redis,
+        config.health_events_stream,
+        maxlen=config.health_events_maxlen,
     )
     service.set_publishers(redis, market_publisher, health_publisher, news_publisher)
 
@@ -130,4 +137,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

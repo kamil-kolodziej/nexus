@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from nexus_ingestion.monitoring.health_endpoint import HealthEndpoint
 
 
@@ -33,9 +32,12 @@ class TestHealthEndpointStop:
 
         # Simulate timeout: wait_for raises, then cancel + gather must clean up
         async def raising_wait_for(coro_or_task, timeout):  # type: ignore[no-untyped-def]
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
-        with patch("nexus_ingestion.monitoring.health_endpoint.asyncio.wait_for", side_effect=raising_wait_for):
+        with patch(
+            "nexus_ingestion.monitoring.health_endpoint.asyncio.wait_for",
+            side_effect=raising_wait_for,
+        ):
             await endpoint.stop()
 
         # The task must be done after stop() fully awaits the cancellation

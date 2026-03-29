@@ -6,11 +6,9 @@ MAXLEN configuration, and event ordering preservation.
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from nexus_ingestion.publishers.redis_publisher import RedisPublisher
 
 

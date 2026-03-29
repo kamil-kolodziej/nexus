@@ -5,13 +5,10 @@ Tests threshold triggering, DATA_GAP alert emission, timer reset, multi-asset in
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from nexus_common.schemas.health_alert import HealthAlert
-
 from nexus_ingestion.monitoring.gap_detector import GapDetector
 
 
@@ -41,7 +38,7 @@ class TestGapDetection:
     async def test_alert_on_stale_event(self, detector: GapDetector, alerts: list) -> None:
         # Manually set old timestamp
         key = "binance:exchange:BTC/USDT"
-        detector._last_event_times[key] = datetime.now(timezone.utc) - timedelta(seconds=10)
+        detector._last_event_times[key] = datetime.now(UTC) - timedelta(seconds=10)
         await detector._check_gaps()
         assert len(alerts) == 1
         assert alerts[0].alert_type == "DATA_GAP"
@@ -50,7 +47,7 @@ class TestGapDetection:
     @pytest.mark.asyncio
     async def test_timer_reset_on_new_event(self, detector: GapDetector, alerts: list) -> None:
         key = "binance:exchange:BTC/USDT"
-        detector._last_event_times[key] = datetime.now(timezone.utc) - timedelta(seconds=10)
+        detector._last_event_times[key] = datetime.now(UTC) - timedelta(seconds=10)
         # New event resets timer
         detector.record_event("binance:exchange", "BTC/USDT")
         await detector._check_gaps()
@@ -59,7 +56,9 @@ class TestGapDetection:
     @pytest.mark.asyncio
     async def test_multi_asset_independence(self, detector: GapDetector, alerts: list) -> None:
         # BTC is stale, ETH is fresh
-        detector._last_event_times["binance:exchange:BTC/USDT"] = datetime.now(timezone.utc) - timedelta(seconds=10)
+        detector._last_event_times["binance:exchange:BTC/USDT"] = datetime.now(UTC) - timedelta(
+            seconds=10
+        )
         detector.record_event("binance:exchange", "ETH/USDT")
         await detector._check_gaps()
         assert len(alerts) == 1

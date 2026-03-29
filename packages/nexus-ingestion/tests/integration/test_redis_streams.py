@@ -8,14 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
 
 import pytest
-
-from nexus_common.schemas.enums import AdapterStatus, EventType
+from nexus_common.schemas.enums import EventType
 from nexus_common.schemas.market_event import MarketEvent
-
 from nexus_ingestion.adapters.base import BaseAdapter
 from nexus_ingestion.config import IngestionConfig
 from nexus_ingestion.publishers.redis_publisher import RedisPublisher
@@ -29,16 +26,14 @@ try:
 except ImportError:
     HAS_TESTCONTAINERS = False
 
-pytestmark = pytest.mark.skipif(
-    not HAS_TESTCONTAINERS, reason="testcontainers not available"
-)
+pytestmark = pytest.mark.skipif(not HAS_TESTCONTAINERS, reason="testcontainers not available")
 
 
 def _make_event(asset: str = "BTC/USDT", n: int = 0) -> MarketEvent:
     return MarketEvent(
         source="binance:exchange",
         asset=asset,
-        timestamp=datetime(2026, 3, 22, 14, 30, n % 60, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 3, 22, 14, 30, n % 60, tzinfo=UTC),
         event_type=EventType.TICK,
         schema_version="1.0.0",
         payload={"bid": 100.0 + n, "ask": 101.0 + n, "last": 100.5 + n, "volume_24h": 0},
@@ -48,7 +43,9 @@ def _make_event(asset: str = "BTC/USDT", n: int = 0) -> MarketEvent:
 class _MockAdapter(BaseAdapter):
     """Mock adapter for integration tests."""
 
-    def __init__(self, adapter_id: str, events: list[MarketEvent], *, fail_after: int | None = None) -> None:
+    def __init__(
+        self, adapter_id: str, events: list[MarketEvent], *, fail_after: int | None = None
+    ) -> None:
         super().__init__(adapter_id=adapter_id, adapter_type="exchange")
         self._events = events
         self._fail_after = fail_after

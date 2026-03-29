@@ -9,10 +9,8 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
-
 from nexus_common.schemas.enums import AdapterStatus
 from nexus_common.schemas.health_alert import AdapterHealth
-
 from nexus_ingestion.monitoring.health_endpoint import create_health_app
 
 

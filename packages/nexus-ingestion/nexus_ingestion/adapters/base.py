@@ -5,8 +5,9 @@ from __future__ import annotations
 import abc
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from nexus_common.schemas.enums import AdapterStatus
 from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
@@ -61,7 +62,7 @@ class BaseAdapter(abc.ABC):
     def record_event(self) -> None:
         """Mark that a valid event was published."""
         self._event_count += 1
-        self._last_event_at = datetime.now(timezone.utc)
+        self._last_event_at = datetime.now(UTC)
 
     def record_error(self) -> None:
         """Mark that an error occurred."""
