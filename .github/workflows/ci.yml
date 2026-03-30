@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+
+jobs:
+  # Runs ruff, mypy, bandit, detect-secrets. No Python deps needed — fast fail before
+  # spending time on test jobs.
+  pre-commit:
+    name: Static analysis (pre-commit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  # Pure logic tests — no Docker, no network. Completes in ~5s. Separated so a broken
+  # import or assertion fails immediately without waiting for containers to spin up.
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install packages
+        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+      - name: Run unit tests
+        run: pytest packages/nexus-common/tests packages/nexus-ingestion/tests/unit --cov --cov-report=term-missing -q
+
+  # Syrupy snapshot tests that verify Redis serialization format hasn't changed.
+  # No Docker needed, but kept separate from unit tests so a snapshot drift shows up
+  # as its own distinct failure in the UI rather than buried in unit output.
+  contract-tests:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install packages
+        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+      - name: Run contract tests
+        run: pytest packages/nexus-ingestion/tests/contract --snapshot-warn-unused -q
+
+  # Tests against real Redis and TimescaleDB via testcontainers (Docker). Separated
+  # because they add ~2-3 min of container startup overhead — unit tests shouldn't
+  # wait for that, and an infra flake here shouldn't look like a code regression.
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install packages
+        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+      - name: Run integration tests
+        run: pytest packages/nexus-ingestion/tests/integration -q
+
+  # Scans all installed dependencies (including transitives) for known CVEs.
+  # Separate job so a vulnerability finding is clearly distinguishable from a test failure.
+  pip-audit:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install packages and pip-audit
+        run: |
+          pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+          pip install pip-audit
+      - name: Audit dependencies
+        run: pip-audit
