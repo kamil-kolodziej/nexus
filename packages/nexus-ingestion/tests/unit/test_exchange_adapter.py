@@ -356,3 +356,449 @@ class TestOrderBookTimestamp:
         event = adapter._normalize_order_book("BTC/USDT", ob)
         assert event is None
         assert adapter._malformed_count == 1
+
+
+class TestConnect:
+    """Tests for ExchangeAdapter.connect() — patches ccxt.pro via sys.modules."""
+
+    def _patch_ccxtpro(self, exchange_id: str, exchange_instance: object) -> object:
+        import sys
+        from unittest.mock import MagicMock
+
+        mock_ccxtpro = MagicMock()
+        setattr(mock_ccxtpro, exchange_id, MagicMock(return_value=exchange_instance))
+        return patch.dict(sys.modules, {"ccxt.pro": mock_ccxtpro})
+
+    @pytest.mark.asyncio
+    async def test_connect_creates_exchange_instance(self) -> None:
+        import sys
+
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        mock_exchange = MagicMock()
+        mock_ccxtpro = MagicMock()
+        mock_ccxtpro.binance = MagicMock(return_value=mock_exchange)
+
+        with patch.dict(sys.modules, {"ccxt.pro": mock_ccxtpro}):
+            await adapter.connect()
+
+        assert adapter._exchange is mock_exchange
+        mock_exchange.set_sandbox_mode.assert_called_once_with(True)
+
+    @pytest.mark.asyncio
+    async def test_connect_passes_api_credentials(self) -> None:
+        import sys
+
+        from pydantic import SecretStr
+
+        adapter = ExchangeAdapter(
+            "binance",
+            api_key=SecretStr("key123"),
+            api_secret=SecretStr("secret456"),
+            sandbox=False,
+        )
+        mock_exchange = MagicMock()
+        mock_exchange_class = MagicMock(return_value=mock_exchange)
+        mock_ccxtpro = MagicMock()
+        mock_ccxtpro.binance = mock_exchange_class
+
+        with patch.dict(sys.modules, {"ccxt.pro": mock_ccxtpro}):
+            await adapter.connect()
+
+        config = mock_exchange_class.call_args[0][0]
+        assert config["apiKey"] == "key123"  # pragma: allowlist secret
+        assert config["secret"] == "secret456"  # pragma: allowlist secret
+
+    @pytest.mark.asyncio
+    async def test_connect_unsupported_exchange_raises(self) -> None:
+        import sys
+
+        adapter = ExchangeAdapter("notarealexchange", sandbox=True)
+        # spec=[] → attribute access raises AttributeError → getattr(obj, name, None) returns None
+        mock_ccxtpro = MagicMock(spec=[])
+
+        with patch.dict(sys.modules, {"ccxt.pro": mock_ccxtpro}):
+            with pytest.raises(ValueError, match="Unsupported exchange"):
+                await adapter.connect()
+
+    @pytest.mark.asyncio
+    async def test_connect_sets_status_to_connected(self) -> None:
+        import sys
+
+        from nexus_common.schemas.enums import AdapterStatus
+
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        mock_ccxtpro = MagicMock()
+        mock_ccxtpro.binance = MagicMock(return_value=MagicMock())
+
+        with patch.dict(sys.modules, {"ccxt.pro": mock_ccxtpro}):
+            await adapter.connect()
+
+        assert adapter.status == AdapterStatus.CONNECTED
+
+    @pytest.mark.asyncio
+    async def test_connect_skips_sandbox_when_false(self) -> None:
+        import sys
+
+        adapter = ExchangeAdapter("binance", sandbox=False)
+        mock_exchange = MagicMock()
+        mock_ccxtpro = MagicMock()
+        mock_ccxtpro.binance = MagicMock(return_value=mock_exchange)
+
+        with patch.dict(sys.modules, {"ccxt.pro": mock_ccxtpro}):
+            await adapter.connect()
+
+        mock_exchange.set_sandbox_mode.assert_not_called()
+
+
+class TestStop:
+    @pytest.mark.asyncio
+    async def test_stop_sets_running_false(self) -> None:
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        adapter._running = True
+        adapter._exchange = None
+        await adapter.stop()
+        assert not adapter._running
+
+    @pytest.mark.asyncio
+    async def test_stop_closes_exchange(self) -> None:
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        mock_exchange = AsyncMock()
+        adapter._exchange = mock_exchange
+        await adapter.stop()
+        mock_exchange.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_handles_exchange_close_error(self) -> None:
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        mock_exchange = AsyncMock()
+        mock_exchange.close.side_effect = RuntimeError("close failed")
+        adapter._exchange = mock_exchange
+        # Must not raise
+        await adapter.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_no_exchange_does_not_raise(self) -> None:
+        adapter = ExchangeAdapter("binance", sandbox=True)
+        adapter._exchange = None
+        await adapter.stop()
+
+
+class TestRun:
+    @pytest.mark.asyncio
+    async def test_run_creates_tasks_per_asset(self) -> None:
+        adapter = ExchangeAdapter("binance", sandbox=True, assets=["BTC/USDT", "ETH/USDT"])
+        adapter._exchange = AsyncMock()
+
+        created_tasks: list[str] = []
+
+        async def _stop_after_start() -> None:
+            adapter._running = False
+
+        import asyncio
+        from unittest.mock import patch as _patch
+
+        # Track task names; stop immediately so run() completes
+        original_create_task = asyncio.create_task
+
+        def fake_create_task(coro: object, *, name: str | None = None) -> asyncio.Task:  # type: ignore[type-arg]
+            if name:
+                created_tasks.append(name)
+            t = original_create_task(coro, name=name)  # type: ignore[arg-type]
+            return t
+
+        with _patch("asyncio.create_task", side_effect=fake_create_task):
+            # stop adapter after first iteration to avoid infinite loops
+            adapter._running = True
+            # Cancel all watch methods immediately
+            adapter._exchange.watch_ticker.side_effect = asyncio.CancelledError
+            adapter._exchange.watch_order_book.side_effect = asyncio.CancelledError
+            adapter._exchange.watch_trades.side_effect = asyncio.CancelledError
+            adapter._exchange.watch_ohlcv.side_effect = asyncio.CancelledError
+            await adapter.run()
+
+        # 4 streams x 2 assets = 8 tasks
+        assert len(created_tasks) == 8
+        assert any("watch_ticker:BTC/USDT" in t for t in created_tasks)
+        assert any("watch_ohlcv:ETH/USDT" in t for t in created_tasks)
+
+
+class TestWatchLoops:
+    """Test the _watch_* loops for event emission, CancelledError exit, and error handling."""
+
+    def _make_running_adapter(self) -> ExchangeAdapter:
+        events: list[MarketEvent] = []
+        adapter = ExchangeAdapter(
+            "binance",
+            sandbox=True,
+            assets=["BTC/USDT"],
+            timestamp_tolerance=300,
+            event_callback=lambda e: events.append(e),
+        )
+        adapter._running = True
+        adapter._captured_events = events  # type: ignore[attr-defined]
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_watch_ticker_emits_event_then_stops(self) -> None:
+        adapter = self._make_running_adapter()
+        ts_ms = int(time.time() * 1000)
+        ticker = {"bid": 100.0, "ask": 101.0, "last": 100.5, "quoteVolume": 0, "timestamp": ts_ms}
+        call_count = 0
+
+        async def fake_watch_ticker(asset: str) -> dict:  # type: ignore[type-arg]
+            nonlocal call_count
+            call_count += 1
+            adapter._running = False  # stop after first tick
+            return ticker
+
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_ticker = fake_watch_ticker
+        await adapter._watch_ticker("BTC/USDT")
+        assert len(adapter._captured_events) == 1  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_watch_ticker_cancelled_error_exits(self) -> None:
+        import asyncio
+
+        adapter = self._make_running_adapter()
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_ticker.side_effect = asyncio.CancelledError
+        # Must exit cleanly, not propagate
+        await adapter._watch_ticker("BTC/USDT")
+
+    @pytest.mark.asyncio
+    async def test_watch_ticker_exception_calls_handle_error(self) -> None:
+        adapter = self._make_running_adapter()
+        call_count = 0
+
+        async def fake_watch_ticker(asset: str) -> None:
+            nonlocal call_count
+            call_count += 1
+            adapter._running = False
+            raise RuntimeError("boom")
+
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_ticker = fake_watch_ticker
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await adapter._watch_ticker("BTC/USDT")
+
+        assert adapter._error_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_watch_order_book_cancelled_error_exits(self) -> None:
+        import asyncio
+
+        adapter = self._make_running_adapter()
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_order_book.side_effect = asyncio.CancelledError
+        await adapter._watch_order_book("BTC/USDT")
+
+    @pytest.mark.asyncio
+    async def test_watch_trades_emits_multiple_events(self) -> None:
+        adapter = self._make_running_adapter()
+        ts_ms = int(time.time() * 1000)
+        trades = [
+            {"id": "1", "price": 100.0, "amount": 0.1, "side": "buy", "timestamp": ts_ms},
+            {"id": "2", "price": 101.0, "amount": 0.2, "side": "sell", "timestamp": ts_ms},
+        ]
+
+        async def fake_watch_trades(asset: str) -> list:  # type: ignore[type-arg]
+            adapter._running = False
+            return trades
+
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_trades = fake_watch_trades
+        await adapter._watch_trades("BTC/USDT")
+        assert len(adapter._captured_events) == 2  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_watch_trades_cancelled_error_exits(self) -> None:
+        import asyncio
+
+        adapter = self._make_running_adapter()
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_trades.side_effect = asyncio.CancelledError
+        await adapter._watch_trades("BTC/USDT")
+
+    @pytest.mark.asyncio
+    async def test_watch_ohlcv_emits_candle_events(self) -> None:
+        adapter = self._make_running_adapter()
+        ts_ms = int(time.time() * 1000)
+        ohlcv_list = [[ts_ms, 100.0, 110.0, 90.0, 105.0, 500.0]]
+
+        async def fake_watch_ohlcv(asset: str, timeframe: str) -> list:  # type: ignore[type-arg]
+            adapter._running = False
+            return ohlcv_list
+
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_ohlcv = fake_watch_ohlcv
+        await adapter._watch_ohlcv("BTC/USDT")
+        assert len(adapter._captured_events) == 1  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_watch_ohlcv_cancelled_error_exits(self) -> None:
+        import asyncio
+
+        adapter = self._make_running_adapter()
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_ohlcv.side_effect = asyncio.CancelledError
+        await adapter._watch_ohlcv("BTC/USDT")
+
+    @pytest.mark.asyncio
+    async def test_watch_ticker_transitions_to_connected_when_reconnecting(self) -> None:
+        from nexus_common.schemas.enums import AdapterStatus
+
+        alerts: list = []
+        adapter = ExchangeAdapter(
+            "binance",
+            sandbox=True,
+            timestamp_tolerance=300,
+            health_callback=lambda a: alerts.append(a),
+        )
+        adapter._running = True
+        adapter.status = AdapterStatus.RECONNECTING
+        ts_ms = int(time.time() * 1000)
+        ticker = {"bid": 100.0, "ask": 101.0, "last": 100.5, "quoteVolume": 0, "timestamp": ts_ms}
+
+        async def fake_watch_ticker(asset: str) -> dict:  # type: ignore[type-arg]
+            adapter._running = False
+            return ticker
+
+        adapter._exchange = AsyncMock()
+        adapter._exchange.watch_ticker = fake_watch_ticker
+        await adapter._watch_ticker("BTC/USDT")
+        assert adapter.status == AdapterStatus.CONNECTED
+        assert any(a.alert_type == "ADAPTER_RECOVERED" for a in alerts)
+
+
+class TestNormalizationEdgeCases:
+    """Cover exception-path branches (lines 201-204, 229-232, 267-270, 304-307)."""
+
+    def test_normalize_tick_exception_returns_none(self, adapter: ExchangeAdapter) -> None:
+        # Pass an object that raises on .get() to trigger the except branch
+        class BadTicker:
+            def get(self, *args: object, **kwargs: object) -> object:
+                raise RuntimeError("unexpected error")
+
+        event = adapter._normalize_tick("BTC/USDT", BadTicker())  # type: ignore[arg-type]
+        assert event is None
+        assert adapter._malformed_count >= 1
+
+    def test_normalize_order_book_exception_returns_none(self, adapter: ExchangeAdapter) -> None:
+        class BadOrderBook:
+            def get(self, *args: object, **kwargs: object) -> object:
+                raise RuntimeError("unexpected error")
+
+        event = adapter._normalize_order_book("BTC/USDT", BadOrderBook())  # type: ignore[arg-type]
+        assert event is None
+
+    def test_normalize_trade_negative_amount_returns_none(self, adapter: ExchangeAdapter) -> None:
+        trade = {
+            "id": "1",
+            "price": 100.0,
+            "amount": -1.0,
+            "side": "buy",
+            "timestamp": int(time.time() * 1000),
+        }
+        event = adapter._normalize_trade("BTC/USDT", trade)
+        assert event is None
+        assert adapter._malformed_count >= 1
+
+    def test_normalize_trade_missing_side_returns_none(self, adapter: ExchangeAdapter) -> None:
+        trade = {
+            "id": "1",
+            "price": 100.0,
+            "amount": 1.0,
+            "side": None,
+            "timestamp": int(time.time() * 1000),
+        }
+        event = adapter._normalize_trade("BTC/USDT", trade)
+        assert event is None
+
+    def test_normalize_trade_exception_returns_none(self, adapter: ExchangeAdapter) -> None:
+        class BadTrade:
+            def get(self, *args: object, **kwargs: object) -> object:
+                raise RuntimeError("boom")
+
+        event = adapter._normalize_trade("BTC/USDT", BadTrade())  # type: ignore[arg-type]
+        assert event is None
+
+    def test_normalize_candle_zero_open_returns_none(self, adapter: ExchangeAdapter) -> None:
+        ts_ms = int(time.time() * 1000)
+        event = adapter._normalize_candle("BTC/USDT", [ts_ms, 0, 110.0, 90.0, 105.0, 500.0])
+        assert event is None
+        assert adapter._malformed_count >= 1
+
+    def test_normalize_candle_none_value_returns_none(self, adapter: ExchangeAdapter) -> None:
+        ts_ms = int(time.time() * 1000)
+        event = adapter._normalize_candle("BTC/USDT", [ts_ms, None, 110.0, 90.0, 105.0, 500.0])
+        assert event is None
+
+    def test_normalize_candle_exception_returns_none(self, adapter: ExchangeAdapter) -> None:
+        event = adapter._normalize_candle("BTC/USDT", "not-a-list")  # type: ignore[arg-type]
+        assert event is None
+
+    def test_parse_timestamp_overflow_returns_none(self, adapter: ExchangeAdapter) -> None:
+        # An absurdly large timestamp triggers OverflowError/OSError
+        result = adapter._parse_timestamp(9999999999999999)
+        assert result is None
+
+    def test_normalize_trade_stale_timestamp_returns_none(self, adapter: ExchangeAdapter) -> None:
+        """Covers the ts is None branch inside _normalize_trade (stale timestamp path)."""
+        old_ts_ms = int((time.time() - 300) * 1000)
+        trade = {
+            "id": "1",
+            "price": 100.0,
+            "amount": 1.0,
+            "side": "buy",
+            "timestamp": old_ts_ms,
+        }
+        event = adapter._normalize_trade("BTC/USDT", trade)
+        assert event is None
+        assert adapter._malformed_count >= 1
+
+    def test_normalize_candle_stale_timestamp_returns_none(self, adapter: ExchangeAdapter) -> None:
+        """Covers the ts is None branch inside _normalize_candle (stale timestamp path)."""
+        old_ts_ms = int((time.time() - 300) * 1000)
+        event = adapter._normalize_candle("BTC/USDT", [old_ts_ms, 100.0, 110.0, 90.0, 105.0, 500.0])
+        assert event is None
+        assert adapter._malformed_count >= 1
+
+
+class TestTransitionNoCallback:
+    """Cover branches where health_callback is None."""
+
+    @pytest.mark.asyncio
+    async def test_transition_to_reconnecting_no_callback(self) -> None:
+        adapter = ExchangeAdapter("binance", sandbox=True, health_callback=None)
+        await adapter._transition_to_reconnecting()
+        from nexus_common.schemas.enums import AdapterStatus
+
+        assert adapter.status == AdapterStatus.RECONNECTING
+
+    @pytest.mark.asyncio
+    async def test_check_and_transition_to_down_no_callback(self) -> None:
+        adapter = ExchangeAdapter(
+            "binance", sandbox=True, max_reconnect_attempts=1, health_callback=None
+        )
+        adapter.status = __import__(
+            "nexus_common.schemas.enums", fromlist=["AdapterStatus"]
+        ).AdapterStatus.RECONNECTING
+        await adapter._check_and_transition_to_down(1)
+        from nexus_common.schemas.enums import AdapterStatus
+
+        assert adapter.status == AdapterStatus.DOWN
+
+    @pytest.mark.asyncio
+    async def test_check_and_transition_to_down_async_callback_awaited(self) -> None:
+        """Covers the asyncio.iscoroutine branch in _check_and_transition_to_down."""
+        async_cb = AsyncMock()
+        adapter = ExchangeAdapter(
+            "binance", sandbox=True, max_reconnect_attempts=1, health_callback=async_cb
+        )
+        from nexus_common.schemas.enums import AdapterStatus
+
+        adapter.status = AdapterStatus.RECONNECTING
+        await adapter._check_and_transition_to_down(1)
+        async_cb.assert_awaited_once()
