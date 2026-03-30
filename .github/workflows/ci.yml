@@ -18,7 +18,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: pre-commit/action@v3.0.1
+          cache: pip
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit
+        run: pre-commit run --all-files
 
   # Pure logic tests — no Docker, no network. Completes in ~5s. Separated so a broken
   # import or assertion fails immediately without waiting for containers to spin up.
