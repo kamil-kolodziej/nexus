@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import structlog
 from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from nexus_ingestion.publishers.health_publisher import HealthPublisher
     from nexus_ingestion.publishers.redis_publisher import RedisPublisher
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class IngestionService:
@@ -106,9 +106,9 @@ class IngestionService:
         if self._timescale_writer:
             if not self._timescale_writer.enqueue(event):
                 logger.warning(
-                    "TimescaleDB queue full — event dropped (source=%s, type=%s)",
-                    event.source,
-                    event.event_type,
+                    "timescale_queue_full_event_dropped",
+                    source=event.source,
+                    event_type=event.event_type,
                 )
                 await self.handle_health_alert(
                     HealthAlert(
@@ -150,7 +150,7 @@ class IngestionService:
         # Start adapters
         for adapter_id, adapter in self._adapters.items():
             self._start_adapter_task(adapter_id, adapter)
-        logger.info("IngestionService started with %d adapter(s)", len(self._adapters))
+        logger.info("ingestion_service_started", adapter_count=len(self._adapters))
 
     def _start_adapter_task(self, adapter_id: str, adapter: BaseAdapter) -> None:
         """Create a task for an adapter and attach failure callback."""
@@ -170,15 +170,15 @@ class IngestionService:
             return
 
         if task.cancelled():
-            logger.info("Adapter %s was cancelled", adapter_id)
+            logger.info("adapter_cancelled", adapter_id=adapter_id)
             return
 
         exc = task.exception()
         if exc is not None:
-            logger.error("Adapter %s failed: %s", adapter_id, exc, exc_info=exc)
+            logger.error("adapter_failed", adapter_id=adapter_id, error=str(exc), exc_info=exc)
             self._schedule_restart(adapter_id)
         else:
-            logger.info("Adapter %s completed normally", adapter_id)
+            logger.info("adapter_completed", adapter_id=adapter_id)
             self._restart_counts[adapter_id] = 0
 
     def _schedule_restart(self, adapter_id: str) -> None:
@@ -188,9 +188,9 @@ class IngestionService:
 
         if max_attempts > 0 and count >= max_attempts:
             logger.error(
-                "Adapter %s exceeded max restart attempts (%d), not restarting",
-                adapter_id,
-                max_attempts,
+                "adapter_max_restarts_exceeded",
+                adapter_id=adapter_id,
+                max_attempts=max_attempts,
             )
             return
 
@@ -200,10 +200,10 @@ class IngestionService:
             self._config.restart_backoff_max,
         )
         logger.info(
-            "Scheduling restart for %s in %.1fs (attempt %d)",
-            adapter_id,
-            delay,
-            count + 1,
+            "adapter_restart_scheduled",
+            adapter_id=adapter_id,
+            delay_s=round(delay, 1),
+            attempt=count + 1,
         )
 
         loop = asyncio.get_running_loop()
@@ -230,26 +230,28 @@ class IngestionService:
         exc = task.exception()
         if exc is not None:
             logger.error(
-                "Restart coroutine for adapter %s raised an unexpected error: %s",
-                adapter_id,
-                exc,
+                "adapter_restart_error",
+                adapter_id=adapter_id,
+                error=str(exc),
                 exc_info=exc,
             )
 
     async def _restart_adapter_async(self, adapter_id: str, adapter: BaseAdapter) -> None:
         """Clean up the adapter then start a fresh task."""
-        logger.info("Restarting adapter %s", adapter_id)
+        logger.info("adapter_restarting", adapter_id=adapter_id)
         try:
             await adapter.stop()
         except Exception:
-            logger.warning("Error stopping adapter %s before restart", adapter_id, exc_info=True)
+            logger.warning(
+                "adapter_stop_error_before_restart", adapter_id=adapter_id, exc_info=True
+            )
         if self._running:
             self._start_adapter_task(adapter_id, adapter)
 
     async def stop(self) -> None:
         """Gracefully shut down all adapter tasks and supporting components."""
         self._running = False
-        logger.info("Stopping IngestionService...")
+        logger.info("ingestion_service_stopping")
 
         # Cancel any pending restart timers
         for handle in self._restart_handles.values():
@@ -269,7 +271,7 @@ class IngestionService:
             try:
                 await adapter.stop()
             except Exception:
-                logger.warning("Error stopping adapter %s", adapter.adapter_id, exc_info=True)
+                logger.warning("adapter_stop_error", adapter_id=adapter.adapter_id, exc_info=True)
 
         # Cancel all tasks
         for task in self._tasks.values():
@@ -292,4 +294,4 @@ class IngestionService:
         if self._redis:
             await self._redis.aclose()  # type: ignore[attr-defined]
 
-        logger.info("IngestionService stopped")
+        logger.info("ingestion_service_stopped")

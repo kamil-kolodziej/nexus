@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from urllib.parse import urlparse, urlunparse
 
+import structlog
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _sanitize_url(url: str) -> str:
@@ -37,5 +37,5 @@ async def create_redis_client(
     )
     # Verify connectivity
     await client.ping()
-    logger.info("Redis connection established: %s", _sanitize_url(url))
+    logger.info("redis_connected", url=_sanitize_url(url))
     return client

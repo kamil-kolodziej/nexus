@@ -85,11 +85,20 @@ This skill is instruction-driven — no external scripts. When asked to review c
 
 The project uses pre-commit hooks for automated Python quality gates. When reviewing:
 
-- **black** — code must be formatted. No manual style debates. Check for unformatted files.
-- **isort** — imports sorted with black-compatible profile. Verify `from __future__ import annotations` is first.
-- **flake8** — no lint violations. Watch for: unused imports, bare `except:`, mutable default arguments, f-string without placeholders.
-- **mypy / type hints** — type annotations on public APIs. `from __future__ import annotations` enables PEP 604 syntax (`X | Y`).
+- **ruff** — lint + import sorting + pyupgrade + bugbear + asyncio correctness checks. No manual style debates.
+- **ruff-format** — code formatting (replaces black). Verify `from __future__ import annotations` is first import.
+- **mypy strict** — type annotations on all source modules. `from __future__ import annotations` enables PEP 604 syntax (`X | Y`). Tests are excluded from strict checking.
+- **bandit** — security scanning. Flag hardcoded secrets, unsafe calls, shell injection.
+- **detect-secrets** — credential leak prevention. Any new baseline entries need justification.
 - If pre-commit is not yet configured, flag files that would fail these checks.
+
+### 12. Structured Logging
+
+- All modules must use `structlog.get_logger()` — never `logging.getLogger(__name__)`.
+- Per-object context bound at construction: `self._logger = structlog.get_logger().bind(adapter_id=self.adapter_id)`.
+- Log calls use snake_case event names + keyword args: `logger.info("event_name", key=value)` — never printf-style `%s` format strings.
+- No credentials in any log call. Redis URLs must be sanitized via `_sanitize_url()` before logging.
+- `configure_logging()` called once at service entry point (`main()`), never inside library code.
 
 ### 11. Spec & Documentation Alignment
 

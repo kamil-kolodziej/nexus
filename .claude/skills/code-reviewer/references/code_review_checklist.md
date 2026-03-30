@@ -71,11 +71,21 @@ Dimension-by-dimension pass/fail checklist. Use during every review.
 
 ## 9. Pre-commit / Static Analysis
 
-- [ ] Code is black-formatted (no style nitpicks in review)
-- [ ] Imports sorted by isort (black-compatible profile)
-- [ ] No flake8 violations: unused imports, bare `except:`, mutable defaults, missing f-string placeholders
-- [ ] Type annotations on public APIs
+- [ ] Code is ruff-formatted (no style nitpicks — ruff-format is the authority)
+- [ ] Imports sorted by ruff; `from __future__ import annotations` is first
+- [ ] No ruff lint violations: unused imports, bare `except:`, mutable defaults, asyncio correctness (RUF, ASYNC rules)
+- [ ] No bandit violations: no hardcoded secrets, no unsafe calls
+- [ ] Type annotations on public APIs; mypy strict passes on source modules
 - [ ] `from __future__ import annotations` enables PEP 604 union syntax
+
+## 12. Structured Logging
+
+- [ ] `structlog.get_logger()` used — no `logging.getLogger(__name__)` anywhere
+- [ ] Per-object loggers bound at construction: `self._logger = structlog.get_logger().bind(adapter_id=...)`
+- [ ] Log calls use snake_case event name + keyword args: `logger.info("event_name", key=value)`
+- [ ] No printf-style format strings in log calls (`%s`, `%d`)
+- [ ] No credentials in any log call; Redis URLs sanitized via `_sanitize_url()`
+- [ ] `configure_logging()` called only at service entry point, not inside library code
 
 ## 11. Spec & Documentation Alignment
 

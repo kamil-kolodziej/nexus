@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
+import structlog
 from nexus_common.schemas.enums import Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TimescaleWriter:
@@ -44,9 +44,9 @@ class TimescaleWriter:
         self._running = True
         self._task = asyncio.create_task(self._writer_loop(), name="timescale-writer")
         logger.info(
-            "TimescaleWriter started (batch=%d, interval=%.1fs)",
-            self._batch_size,
-            self._flush_interval,
+            "timescale_writer_started",
+            batch_size=self._batch_size,
+            flush_interval_s=self._flush_interval,
         )
 
     async def stop(self) -> None:
@@ -62,7 +62,7 @@ class TimescaleWriter:
         await self._flush_batch()
         if self._pool:
             await self._pool.close()
-        logger.info("TimescaleWriter stopped")
+        logger.info("timescale_writer_stopped")
 
     def enqueue(self, event: MarketEvent) -> bool:
         """Add event to the write queue. Returns False if queue is full (event dropped)."""
@@ -71,8 +71,8 @@ class TimescaleWriter:
             return True
         except asyncio.QueueFull:
             logger.warning(
-                "TimescaleWriter queue full (%d), dropping event",
-                self._queue.qsize(),
+                "timescale_queue_full_event_dropped",
+                queue_size=self._queue.qsize(),
             )
             return False
 
@@ -107,7 +107,7 @@ class TimescaleWriter:
                     await self._write_batch(batch)
                 break
             except Exception:
-                logger.error("Writer loop error", exc_info=True)
+                logger.error("timescale_writer_loop_error", exc_info=True)
                 await asyncio.sleep(1)
 
     async def _write_batch(self, batch: list[MarketEvent]) -> None:
@@ -144,26 +144,26 @@ class TimescaleWriter:
                             "schema_version",
                         ],
                     )
-                logger.debug("Wrote %d records to TimescaleDB", len(records))
+                logger.debug("timescale_batch_written", record_count=len(records))
                 return
             except Exception as e:
                 retries += 1
                 if retries > max_retries:
                     logger.error(
-                        "TimescaleDB batch write failed after %d retries: %s",
-                        max_retries,
-                        e,
+                        "timescale_batch_write_failed",
+                        max_retries=max_retries,
+                        error=str(e),
                     )
                     await self._emit_persistence_error(len(batch), str(e))
                     return
 
                 delay = 2**retries
                 logger.warning(
-                    "TimescaleDB write failed (attempt %d/%d), retrying in %ds: %s",
-                    retries,
-                    max_retries,
-                    delay,
-                    e,
+                    "timescale_write_retry",
+                    attempt=retries,
+                    max_retries=max_retries,
+                    delay_s=delay,
+                    error=str(e),
                 )
                 await asyncio.sleep(delay)
 

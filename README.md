@@ -119,6 +119,8 @@ cp config.example.toml config.toml
 NEXUS_EXCHANGE_API_KEY=... NEXUS_EXCHANGE_API_SECRET=... python -m nexus_ingestion.main
 ```
 
+Set `NEXUS_LOG_ENV=development` for human-readable log output (default is JSON).
+
 ## Status
 
 Active development. `nexus-common` and `nexus-ingestion` are implemented. Remaining services are in design/planning.

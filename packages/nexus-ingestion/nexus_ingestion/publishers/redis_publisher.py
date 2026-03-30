@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from collections import deque
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
+
 if TYPE_CHECKING:
     from redis.asyncio import Redis
-
-logger = logging.getLogger(__name__)
 
 
 class RedisPublisher:
@@ -27,6 +26,7 @@ class RedisPublisher:
         self._maxlen = maxlen
         self._buffer: deque[dict[str, str]] = deque(maxlen=buffer_max)
         self._connected = True
+        self._logger = structlog.get_logger().bind(stream=stream)
 
     @property
     def stream(self) -> str:
@@ -54,9 +54,9 @@ class RedisPublisher:
             )
             return cast(str, entry_id)
         except Exception:
-            logger.warning(
-                "Redis publish failed, buffering event (buffer: %d)",
-                len(self._buffer),
+            self._logger.warning(
+                "redis_publish_failed",
+                buffer_size=len(self._buffer),
             )
             self._connected = False
             self._buffer.append(fields)
@@ -86,11 +86,11 @@ class RedisPublisher:
                 await pipe.execute()
 
             self._connected = True
-            logger.info("Flushed %d buffered events to %s", flushed, self._stream)
+            self._logger.info("redis_buffer_flushed", flushed=flushed)
             return flushed
 
         except Exception:
-            logger.error("Buffer flush failed, %d events remain", len(self._buffer))
+            self._logger.error("redis_buffer_flush_failed", events_remaining=len(self._buffer))
             return 0
 
     async def reconnect(self, redis: Redis[Any]) -> None:
