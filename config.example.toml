@@ -36,6 +36,8 @@ health_port = 8080
 gap_threshold = 60
 timestamp_tolerance = 60
 malformed_rate_threshold = 2
+# log_env = "production"  # "development" → human-readable console; "production" → JSON (default)
+# Override via env var: NEXUS_LOG_ENV=development
 
 [supervisor]
 max_restart_attempts = 10

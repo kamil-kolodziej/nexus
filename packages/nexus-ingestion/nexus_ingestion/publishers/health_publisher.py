@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 from nexus_common.schemas.health_alert import HealthAlert
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
-
-logger = logging.getLogger(__name__)
 
 HEALTH_STREAM = "nexus:ingestion-health-events"
 HEALTH_MAXLEN = 5000
@@ -28,6 +26,7 @@ class HealthPublisher:
         self._redis = redis
         self._stream = stream
         self._maxlen = maxlen
+        self._logger = structlog.get_logger().bind(stream=stream)
 
     async def publish(self, alert: HealthAlert) -> str | None:
         """Publish a health alert to the stream."""
@@ -38,18 +37,18 @@ class HealthPublisher:
                 maxlen=self._maxlen,
                 approximate=True,
             )
-            logger.info(
-                "Health alert published: %s %s %s",
-                alert.alert_type,
-                alert.severity,
-                alert.adapter_id,
+            self._logger.info(
+                "health_alert_published",
+                alert_type=alert.alert_type,
+                severity=alert.severity,
+                adapter_id=alert.adapter_id,
             )
             return cast(str, entry_id)
         except Exception:
-            logger.error(
-                "Failed to publish health alert: %s %s",
-                alert.alert_type,
-                alert.adapter_id,
+            self._logger.error(
+                "health_alert_publish_failed",
+                alert_type=alert.alert_type,
+                adapter_id=alert.adapter_id,
                 exc_info=True,
             )
             return None

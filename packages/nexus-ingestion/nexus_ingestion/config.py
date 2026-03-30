@@ -71,6 +71,7 @@ class IngestionConfig(BaseSettings):
     gap_threshold: int = 60
     timestamp_tolerance: int = 60
     malformed_rate_threshold: int = 2
+    log_env: str = "production"  # "development" → human-readable console; default → JSON
 
     # Supervisor
     max_restart_attempts: int = 10
@@ -110,12 +111,12 @@ class IngestionConfig(BaseSettings):
         exchange = raw.get("exchange")
         if isinstance(exchange, dict):
             if "api_key" in exchange or "api_secret" in exchange:
-                import logging as _log
+                import structlog as _structlog
 
-                _log.getLogger(__name__).warning(
-                    "Credentials found in TOML config are ignored. "
-                    "Set NEXUS_EXCHANGE_API_KEY and NEXUS_EXCHANGE_API_SECRET "
-                    "via environment variables only (SRC-003)."
+                _structlog.get_logger().warning(
+                    "toml_credentials_ignored",
+                    reason="Set NEXUS_EXCHANGE_API_KEY and NEXUS_EXCHANGE_API_SECRET "
+                    "via environment variables only (SRC-003).",
                 )
             if "id" in exchange:
                 settings["exchange_id"] = exchange["id"]
@@ -167,6 +168,7 @@ class IngestionConfig(BaseSettings):
                 "gap_threshold": "gap_threshold",
                 "timestamp_tolerance": "timestamp_tolerance",
                 "malformed_rate_threshold": "malformed_rate_threshold",
+                "log_env": "log_env",
             }
             for key, target in monitoring_fields.items():
                 if key in monitoring:

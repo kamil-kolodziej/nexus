@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
+import structlog
 import uvicorn
 from fastapi import FastAPI
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def create_health_app() -> FastAPI:
@@ -62,7 +62,7 @@ class HealthEndpoint:
         )
         self._server = uvicorn.Server(config)
         self._task = asyncio.create_task(self._server.serve(), name="health-endpoint")
-        logger.info("Health endpoint started on port %d", self._port)
+        logger.info("health_endpoint_started", port=self._port)
 
     async def stop(self) -> None:
         """Shutdown the server."""

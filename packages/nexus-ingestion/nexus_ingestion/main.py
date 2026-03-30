@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import signal
 
+import structlog
+from nexus_common.logging import configure_logging
 from nexus_common.redis_client import create_redis_client
 
 from nexus_ingestion.adapters.exchange_adapter import ExchangeAdapter
@@ -18,23 +19,19 @@ from nexus_ingestion.publishers.health_publisher import HealthPublisher
 from nexus_ingestion.publishers.redis_publisher import RedisPublisher
 from nexus_ingestion.service import IngestionService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _request_shutdown(stop_event: asyncio.Event) -> None:
     """Signal handler — sets the stop event to trigger graceful shutdown."""
-    logger.info("Received shutdown signal, stopping...")
+    logger.info("shutdown_requested")
     stop_event.set()
 
 
 async def run() -> None:
     """Main async entry point."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
     config = IngestionConfig()
+    configure_logging(env=config.log_env)
     service = IngestionService(config)
 
     # Create Redis connection
@@ -126,9 +123,9 @@ def main() -> None:
         import uvloop
 
         uvloop.install()
-        logger.info("uvloop installed as event loop policy")
+        logger.info("uvloop_installed")
     except ImportError:
-        logger.info("uvloop not available, using default event loop")
+        logger.info("uvloop_unavailable")
 
     try:
         asyncio.run(run())

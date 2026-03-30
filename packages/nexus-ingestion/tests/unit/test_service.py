@@ -297,7 +297,7 @@ class TestRestartTaskExceptionLogged:
         with patch("nexus_ingestion.service.logger") as mock_logger:
             service._on_restart_done("test:exchange", mock_task)
             mock_logger.error.assert_called_once()
-            assert "test:exchange" in mock_logger.error.call_args[0][1]
+            assert mock_logger.error.call_args.kwargs.get("adapter_id") == "test:exchange"
 
     async def test_on_restart_done_silent_on_cancellation(self) -> None:
         """_on_restart_done must not log when the restart task was cancelled."""

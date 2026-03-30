@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from nexus_common.schemas.enums import AdapterStatus, EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
 from pydantic import SecretStr
 
 from nexus_ingestion.adapters.base import BaseAdapter
-
-logger = logging.getLogger(__name__)
 
 
 class ExchangeAdapter(BaseAdapter):
@@ -50,6 +48,7 @@ class ExchangeAdapter(BaseAdapter):
         self._exchange: Any = None
         self._running = False
         self._stream_reconnect_attempts: dict[str, int] = {}
+        self._logger = structlog.get_logger().bind(adapter_id=self.adapter_id)
 
     async def connect(self) -> None:
         """Create and configure the ccxt.pro exchange instance."""
@@ -74,11 +73,11 @@ class ExchangeAdapter(BaseAdapter):
             self._exchange.set_sandbox_mode(True)
 
         self.status = AdapterStatus.CONNECTED
-        logger.info(
-            "ExchangeAdapter connected: %s (sandbox=%s, assets=%s)",
-            self._exchange_id,
-            self._sandbox,
-            self._assets,
+        self._logger.info(
+            "exchange_adapter_connected",
+            exchange_id=self._exchange_id,
+            sandbox=self._sandbox,
+            assets=self._assets,
         )
 
     async def subscribe(self) -> None:
@@ -110,7 +109,7 @@ class ExchangeAdapter(BaseAdapter):
             try:
                 await self._exchange.close()
             except Exception:
-                logger.warning("Error closing exchange connection", exc_info=True)
+                self._logger.warning("exchange_close_error", exc_info=True)
 
     async def _watch_ticker(self, asset: str) -> None:
         """Watch ticker (best bid/ask) for an asset."""
@@ -200,7 +199,7 @@ class ExchangeAdapter(BaseAdapter):
             )
         except Exception:
             self.record_malformed()
-            logger.debug("Failed to normalize tick for %s", asset, exc_info=True)
+            self._logger.debug("normalize_tick_failed", asset=asset, exc_info=True)
             return None
 
     def _normalize_order_book(self, asset: str, ob: dict[str, Any]) -> MarketEvent | None:
@@ -228,7 +227,7 @@ class ExchangeAdapter(BaseAdapter):
             )
         except Exception:
             self.record_malformed()
-            logger.debug("Failed to normalize order book for %s", asset, exc_info=True)
+            self._logger.debug("normalize_order_book_failed", asset=asset, exc_info=True)
             return None
 
     def _normalize_trade(self, asset: str, trade: dict[str, Any]) -> MarketEvent | None:
@@ -266,7 +265,7 @@ class ExchangeAdapter(BaseAdapter):
             )
         except Exception:
             self.record_malformed()
-            logger.debug("Failed to normalize trade for %s", asset, exc_info=True)
+            self._logger.debug("normalize_trade_failed", asset=asset, exc_info=True)
             return None
 
     def _normalize_candle(self, asset: str, ohlcv: list[Any]) -> MarketEvent | None:
@@ -303,7 +302,7 @@ class ExchangeAdapter(BaseAdapter):
             )
         except Exception:
             self.record_malformed()
-            logger.debug("Failed to normalize candle for %s", asset, exc_info=True)
+            self._logger.debug("normalize_candle_failed", asset=asset, exc_info=True)
             return None
 
     def _parse_timestamp(self, ts: int | float | None) -> datetime | None:
@@ -316,11 +315,11 @@ class ExchangeAdapter(BaseAdapter):
             now = datetime.now(UTC)
             diff = abs((now - dt).total_seconds())
             if diff > self._timestamp_tolerance:
-                logger.debug(
-                    "Timestamp outside tolerance: %s (diff=%.1fs, tolerance=%ds)",
-                    dt.isoformat(),
-                    diff,
-                    self._timestamp_tolerance,
+                self._logger.debug(
+                    "timestamp_tolerance_exceeded",
+                    ts=dt.isoformat(),
+                    diff_s=round(diff, 1),
+                    tolerance_s=self._timestamp_tolerance,
                 )
                 return None
             return dt
@@ -330,7 +329,7 @@ class ExchangeAdapter(BaseAdapter):
     async def _handle_watch_error(self, method: str, asset: str, error: Exception) -> None:
         """Handle errors from watch methods with health alert emission."""
         self.record_error()
-        logger.warning("%s error for %s: %s", method, asset, error)
+        self._logger.warning("watch_error", method=method, asset=asset, error=str(error))
 
         stream_key = f"{method}:{asset}"
         try:

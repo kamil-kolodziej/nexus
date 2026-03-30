@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from calendar import timegm
 from collections import OrderedDict
 from collections.abc import Callable
@@ -12,14 +11,13 @@ from typing import Any
 
 import aiohttp
 import feedparser
+import structlog
 from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
 
 from nexus_ingestion.adapters.base import BaseAdapter
 from nexus_ingestion.config import NewsSourceType
-
-logger = logging.getLogger(__name__)
 
 
 class NewsAdapter(BaseAdapter):
@@ -55,11 +53,14 @@ class NewsAdapter(BaseAdapter):
         self._seen_urls_max = 10_000
         self._running = False
         self._source_was_up: bool = True
+        self._logger = structlog.get_logger().bind(adapter_id=self.adapter_id)
 
     async def connect(self) -> None:
         """Create the aiohttp client session."""
         self._session = aiohttp.ClientSession()
-        logger.info("NewsAdapter connected: %s (%s)", self._source_name, self._source_url)
+        self._logger.info(
+            "news_adapter_connected", source_name=self._source_name, source_url=self._source_url
+        )
 
     async def subscribe(self) -> None:
         """No subscription needed for polling adapter."""
@@ -73,7 +74,7 @@ class NewsAdapter(BaseAdapter):
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.error("News poll error for %s", self._source_name, exc_info=True)
+                self._logger.error("news_poll_error", source_name=self._source_name, exc_info=True)
                 self.record_error()
                 await self._emit_source_down_alert()
 
@@ -102,8 +103,8 @@ class NewsAdapter(BaseAdapter):
                 self._source_url, timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
                 if resp.status != 200:
-                    logger.warning(
-                        "RSS fetch failed: HTTP %d from %s", resp.status, self._source_url
+                    self._logger.warning(
+                        "rss_fetch_failed", status=resp.status, url=self._source_url
                     )
                     self.record_error()
                     await self._emit_source_down_alert()
@@ -111,7 +112,7 @@ class NewsAdapter(BaseAdapter):
                 body = await resp.text()
                 await self._emit_source_recovered_alert()
         except Exception as e:
-            logger.warning("RSS fetch error for %s: %s", self._source_name, e)
+            self._logger.warning("rss_fetch_error", source_name=self._source_name, error=str(e))
             self.record_error()
             await self._emit_source_down_alert()
             return
@@ -171,7 +172,7 @@ class NewsAdapter(BaseAdapter):
             )
         except Exception:
             self.record_malformed()
-            logger.debug("Failed to normalize RSS entry", exc_info=True)
+            self._logger.debug("normalize_rss_entry_failed", exc_info=True)
             return None
 
     async def _emit_source_down_alert(self) -> None:

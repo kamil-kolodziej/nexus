@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import abc
 import asyncio
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -12,8 +11,6 @@ from typing import Any
 from nexus_common.schemas.enums import AdapterStatus
 from nexus_common.schemas.health_alert import AdapterHealth, HealthAlert
 from nexus_common.schemas.market_event import MarketEvent
-
-logger = logging.getLogger(__name__)
 
 
 class BaseAdapter(abc.ABC):

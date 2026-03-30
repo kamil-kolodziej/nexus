@@ -136,6 +136,20 @@ Adapters never import publishers or writers directly. This same callback-injecti
 
 `RedisPublisher` buffers events in a bounded deque on disconnect and flushes via pipeline on reconnect. `HealthPublisher` does **not** buffer — alerts are dropped when Redis is unavailable to avoid circular dependencies.
 
+## Logging
+
+All services use **structlog** (in `nexus-common`). Never use `logging.getLogger(__name__)`.
+
+- Module-level: `logger = structlog.get_logger()`
+- Per-object (preferred for adapters/publishers): `self._logger = structlog.get_logger().bind(adapter_id=self.adapter_id)`
+- Log calls use snake_case event names + keyword args — never printf-style format strings:
+  ```python
+  self._logger.info("exchange_adapter_connected", sandbox=self._sandbox, assets=self._assets)
+  self._logger.error("batch_write_failed", max_retries=max_retries, error=str(e), exc_info=True)
+  ```
+- Call `configure_logging(env=config.log_env)` once at service startup (inside `run()`, after `IngestionConfig()` is loaded), never in library code. Controlled via `NEXUS_LOG_ENV` env var or `log_env` in `config.toml [monitoring]`. `"development"` → human-readable console; `"production"` (default) → JSON.
+- The stdlib integration is wired automatically — foreign loggers (uvicorn, asyncpg, ccxt) also emit structured output.
+
 ## Config Precedence
 
 `IngestionConfig` (pydantic-settings) loads in this order (highest wins):

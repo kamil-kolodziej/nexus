@@ -75,7 +75,7 @@ def test_init_overrides_env_and_toml(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_toml_credentials_ignored_and_warned(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """SRC-003: api_key/api_secret in TOML must not load into config and must warn."""
     config_file = tmp_path / "config.toml"
@@ -85,15 +85,13 @@ def test_toml_credentials_ignored_and_warned(
     )
     monkeypatch.setenv("NEXUS_CONFIG_FILE", str(config_file))
 
-    import logging
-
-    with caplog.at_level(logging.WARNING):
-        config = IngestionConfig()
+    config = IngestionConfig()
 
     assert config.exchange_api_key.get_secret_value() == ""
     assert config.exchange_api_secret.get_secret_value() == ""
-    assert "ignored" in caplog.text
-    assert "SRC-003" in caplog.text
+    out = capsys.readouterr().out
+    assert "ignored" in out
+    assert "SRC-003" in out
 
 
 def test_invalid_news_source_type_raises() -> None:

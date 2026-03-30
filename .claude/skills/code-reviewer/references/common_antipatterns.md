@@ -109,21 +109,24 @@ host=config.health_host  # default "127.0.0.1", override to "0.0.0.0" for Docker
 
 ## 8. Logging Credentials
 
-**Problem**: Connection URLs often contain passwords.
+**Problem**: Connection URLs often contain passwords. Printf-style format strings also make it easy to accidentally log a value that contains secrets.
 
 ```python
-# BAD
+# BAD — URL leaks password, printf-style hides what's being logged
 logger.info("Redis connection established: %s", url)
 # Output: Redis connection established: redis://:secretpass@localhost:6379
 
-# GOOD — sanitize
+# GOOD — structlog with sanitized URL as a keyword arg
+import structlog
+logger = structlog.get_logger()
+logger.info("redis_connected", url=_sanitize_url(url))
+
+# sanitize helper (already in nexus_common/redis_client.py)
 from urllib.parse import urlparse, urlunparse
 def _sanitize_url(url: str) -> str:
     parsed = urlparse(url)
-    if parsed.password:
-        replaced = parsed._replace(netloc=f"{parsed.hostname}:{parsed.port}")
-        return urlunparse(replaced)
-    return url
+    netloc = f"{parsed.hostname}:{parsed.port}" if parsed.port else (parsed.hostname or "")
+    return urlunparse(parsed._replace(netloc=netloc))
 ```
 
 ---

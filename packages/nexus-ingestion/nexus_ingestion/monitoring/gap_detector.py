@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from nexus_common.schemas.enums import Severity
 from nexus_common.schemas.health_alert import HealthAlert
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GapDetector:
@@ -38,7 +38,7 @@ class GapDetector:
         """Start the gap detection background loop."""
         self._running = True
         self._task = asyncio.create_task(self._check_loop(), name="gap-detector")
-        logger.info("GapDetector started (threshold=%ds)", self._gap_threshold)
+        logger.info("gap_detector_started", threshold_s=self._gap_threshold)
 
     async def stop(self) -> None:
         """Stop the gap detection loop."""
@@ -72,7 +72,7 @@ class GapDetector:
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.error("Gap detector check error", exc_info=True)
+                logger.error("gap_detector_check_error", exc_info=True)
 
     async def _check_gaps(self) -> None:
         """Check all tracked assets for data gaps."""

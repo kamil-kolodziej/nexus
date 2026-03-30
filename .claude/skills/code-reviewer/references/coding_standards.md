@@ -34,10 +34,10 @@ Enforced by **isort** with black-compatible profile:
 from __future__ import annotations          # always first
 
 import asyncio                              # stdlib
-import logging
 from datetime import datetime, timezone
 
 import aiohttp                              # third-party
+import structlog
 from pydantic import BaseModel, Field
 
 from nexus_common.schemas.enums import EventType   # local packages
@@ -65,10 +65,21 @@ Enforced by **black** (line length 120, target Python 3.11+) and **flake8**:
 
 ## Logging
 
-- Use `logging.getLogger(__name__)` per module.
-- Levels: `DEBUG` for normalization details, `INFO` for lifecycle events, `WARNING` for recoverable errors, `ERROR` for failures.
-- Never log credentials or full Redis URLs with passwords.
-- Use lazy formatting: `logger.info("Wrote %d records", count)`, not f-strings in log calls.
+- Use `structlog.get_logger()` (module-level or bound in `__init__`). Never use `logging.getLogger(__name__)`.
+- Bind per-object context at construction — `self._logger = structlog.get_logger().bind(adapter_id=self.adapter_id)` — so every log line from that instance carries the context automatically.
+- Use snake_case event names as the first positional arg; all context as keyword args:
+  ```python
+  # correct
+  self._logger.info("exchange_adapter_connected", exchange_id=self._exchange_id, sandbox=self._sandbox)
+  self._logger.error("batch_write_failed", max_retries=max_retries, error=str(e))
+
+  # wrong — printf-style format strings
+  logger.info("ExchangeAdapter connected: %s (sandbox=%s)", exchange_id, sandbox)
+  ```
+- Levels: `DEBUG` for normalization/trace details, `INFO` for lifecycle events, `WARNING` for recoverable errors, `ERROR` for failures requiring attention.
+- Never log credentials or full Redis URLs with passwords — use `_sanitize_url()` for Redis URLs.
+- Call `configure_logging(env=os.getenv("NEXUS_LOG_ENV", "production"))` once at service startup (`main()`). `NEXUS_LOG_ENV=development` produces human-readable console output; default is JSON.
+- `exc_info=True` as a keyword arg surfaces the full traceback in structured output: `logger.error("event", exc_info=True)`.
 
 ## asyncio Patterns
 
@@ -119,9 +130,11 @@ Expected hooks (configured in `.pre-commit-config.yaml`):
 
 | Hook | Purpose | Config |
 |------|---------|--------|
-| **black** | Code formatting | Project formatter config (`pyproject.toml` or equivalent) |
-| **isort** | Import sorting | Project import-sorting config (black-compatible profile) |
-| **flake8** | Lint violations | Project linter config (`.flake8`, `pyproject.toml`, or equivalent) |
-| **mypy** | Type checking (optional) | Project type-checker config (`pyproject.toml` or equivalent) |
+| **ruff** | Lint + import sorting + pyupgrade + bugbear + asyncio correctness | `[tool.ruff]` in `pyproject.toml` |
+| **ruff-format** | Code formatting (replaces black) | `[tool.ruff]` in `pyproject.toml` |
+| **mypy strict** | Type checking on all source modules (tests excluded) | `[tool.mypy]` in `pyproject.toml` |
+| **bandit** | Security scanning (hardcoded secrets, unsafe calls) | `[tool.bandit]` in `pyproject.toml` |
+| **detect-secrets** | Credential leak prevention | `.secrets.baseline` |
+| **pre-commit-hooks** | Trailing whitespace, EOF, YAML/TOML syntax, merge conflicts, debug statements | — |
 
 Run manually: `pre-commit run --all-files`. Runs automatically on `git commit`.
