@@ -68,6 +68,24 @@ class TestRSSNormalization:
         assert event is not None
         assert len(event.payload["body_summary"]) == 1000
 
+    def test_empty_summary_falls_back_to_content(self, adapter: NewsAdapter) -> None:
+        entry = _make_rss_entry()
+        entry.summary = ""
+        entry.content = [{"value": "Full article body text.", "type": "text/plain"}]
+        event = adapter._normalize_entry(entry)
+        assert event is not None
+        assert event.payload["body_summary"] == "Full article body text."
+
+    def test_html_content_tags_stripped(self, adapter: NewsAdapter) -> None:
+        entry = _make_rss_entry()
+        entry.summary = ""
+        entry.content = [{"value": "<p>Bitcoin <b>surges</b> past $70k.</p>", "type": "text/html"}]
+        event = adapter._normalize_entry(entry)
+        assert event is not None
+        assert "<" not in event.payload["body_summary"]
+        assert "Bitcoin" in event.payload["body_summary"]
+        assert "surges" in event.payload["body_summary"]
+
     def test_missing_link_returns_none(self, adapter: NewsAdapter) -> None:
         entry = _make_rss_entry(link="")
         event = adapter._normalize_entry(entry)

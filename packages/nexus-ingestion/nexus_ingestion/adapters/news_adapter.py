@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from calendar import timegm
 from collections import OrderedDict
 from collections.abc import Callable
@@ -18,6 +19,9 @@ from nexus_common.schemas.market_event import MarketEvent
 
 from nexus_ingestion.adapters.base import BaseAdapter
 from nexus_ingestion.config import NewsSourceType
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 class NewsAdapter(BaseAdapter):
@@ -141,6 +145,13 @@ class NewsAdapter(BaseAdapter):
                 return None
 
             summary = getattr(entry, "summary", "") or ""
+            if not summary:
+                content_list = getattr(entry, "content", None)
+                if content_list:
+                    raw = content_list[0].get("value", "") or ""
+                    if raw and "<" in raw:
+                        raw = _WHITESPACE_RE.sub(" ", _HTML_TAG_RE.sub(" ", raw)).strip()
+                    summary = raw
             if len(summary) > 1000:
                 summary = summary[:1000]
 

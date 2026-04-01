@@ -47,6 +47,7 @@ module = [
     "ccxt.*",
     "ccxt.pro.*",
     "feedparser.*",
+    "nexus_common.*",  # local package; not installable in pre-commit's isolated env
     "tomli.*",
     "uvicorn.*",
     "uvloop.*",
