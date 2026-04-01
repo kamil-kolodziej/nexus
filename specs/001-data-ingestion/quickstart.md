@@ -15,7 +15,7 @@
 ```bash
 git clone git@github.com:kamil-kolodziej/nexus.git
 cd nexus
-git checkout 001-data-ingestion
+git checkout main
 ```
 
 ### 2. Start infrastructure
@@ -40,31 +40,43 @@ pip install -e ".[dev]"
 
 ### 4. Configure
 
-Copy the example config and set your credentials:
+Copy the example env file and set your credentials:
+
+```bash
+cp .env.example .env
+# edit .env — add NEXUS_EXCHANGE_API_KEY and NEXUS_EXCHANGE_API_SECRET
+```
+
+Export the variables in your shell before running the service (`.env` is not loaded
+automatically by Python — use a zsh dotenv plugin, or run manually):
+
+```bash
+export $(grep -v '^#' .env | grep '=' | xargs)
+```
+
+Copy `config.example.toml` to `config.toml` to customise non-secret settings
+(subscribed assets, news sources, batch sizes, polling intervals). **Required when running
+via Docker Compose** — the compose file mounts `config.toml` into the container. Optional
+when running the service directly on the host. Environment variables always take precedence
+over TOML values.
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-Set exchange credentials via environment variables:
+> **Note**: The database schema is applied automatically on first container startup
+> via `docker/timescaledb/init.sql`. No manual schema step is required.
 
-```bash
-export NEXUS_EXCHANGE_API_KEY="your-testnet-api-key"
-export NEXUS_EXCHANGE_API_SECRET="your-testnet-api-secret"
-```
-
-### 5. Apply database schema
-
-```bash
-docker compose -f docker-compose.dev.yml exec -T timescaledb psql -U nexus -d nexus < packages/nexus-ingestion/nexus_ingestion/persistence/schema.sql
-```
-
-This creates the `market_events` and `health_alerts` hypertables in TimescaleDB.
-
-### 6. Run the service
+### 5. Run the service
 
 ```bash
 python -m nexus_ingestion.main
+```
+
+Or run everything in containers:
+
+```bash
+docker compose up --build
 ```
 
 The service will:
@@ -73,7 +85,7 @@ The service will:
 3. Start publishing `MarketEvent` records to `nexus:market-events` Redis Stream
 4. Expose health endpoint at `http://localhost:8080/health`
 
-### 7. Verify events
+### 6. Verify events
 
 In another terminal, read from the Redis Stream:
 
@@ -83,7 +95,7 @@ redis-cli XREAD COUNT 5 BLOCK 5000 STREAMS nexus:market-events 0
 
 You should see events within 5 seconds of startup.
 
-### 8. Check health
+### 7. Check health
 
 ```bash
 curl http://localhost:8080/health

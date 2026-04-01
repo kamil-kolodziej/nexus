@@ -23,8 +23,7 @@ queue_maxsize = 50000
 
 [news]
 poll_interval = 300
-sources = []
-# Example RSS source:
+# Uncomment and repeat to add news sources:
 # [[news.sources]]
 # name = "coindesk-rss"
 # type = "rss"

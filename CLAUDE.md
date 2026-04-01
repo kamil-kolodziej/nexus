@@ -176,6 +176,6 @@ The backtesting engine runs identical strategy, aggregation, and risk code. Only
 
 ## Storage
 
-- **TimescaleDB** — all market events, trade history, audit trail, backtest queries. Schema at `packages/nexus-ingestion/nexus_ingestion/persistence/schema.sql`. Writes use `asyncpg.copy_records_to_table` (no ORM in the hot path).
+- **TimescaleDB** — all market events, trade history, audit trail, backtest queries. Schema at `docker/timescaledb/init.sql` (mounted into TimescaleDB via Docker Compose on first startup). Writes use `asyncpg.copy_records_to_table` (no ORM in the hot path).
 - **Redis** — hot state (prices, positions, probability matrix)
 - **ClickHouse** — planned for large-scale analytics and reporting
