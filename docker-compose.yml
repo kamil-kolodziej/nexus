@@ -17,7 +17,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: nexus
-      POSTGRES_PASSWORD: nexus_dev
+      POSTGRES_PASSWORD: nexus_dev  # pragma: allowlist secret
       POSTGRES_DB: nexus
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
@@ -27,6 +27,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  nexus-ingestion:
+    build:
+      context: .
+      dockerfile: packages/nexus-ingestion/Dockerfile
+    env_file: .env
+    environment:
+      NEXUS_REDIS_URL: redis://redis:6379
+      NEXUS_TIMESCALEDB_DSN: postgresql://nexus:nexus_dev@timescaledb:5432/nexus  # pragma: allowlist secret
+      NEXUS_HEALTH_HOST: "0.0.0.0"
+      NEXUS_CONFIG_FILE: /app/config.toml
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   redis-data:

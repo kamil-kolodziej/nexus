@@ -113,11 +113,24 @@ docker compose -f docker-compose.dev.yml up -d
 pytest packages/nexus-ingestion/tests/integration
 ```
 
-**Run the ingestion service:**
+**Run the full stack (all services in containers):**
 ```bash
-cp config.example.toml config.toml
-NEXUS_EXCHANGE_API_KEY=... NEXUS_EXCHANGE_API_SECRET=... python -m nexus_ingestion.main
+cp .env.example .env              # required; add credentials for live trading (sandbox works without)
+cp config.example.toml config.toml  # required; edit to add news sources, change assets, etc.
+docker compose up --build
+curl http://localhost:8080/health
 ```
+
+**Run the ingestion service locally (infra in Docker, service on host):**
+```bash
+cp .env.example .env        # add credentials; .env is not loaded automatically by Python
+docker compose -f docker-compose.dev.yml up -d
+python -m nexus_ingestion.main  # export .env vars in your shell first
+```
+
+`.env` is only loaded automatically by `docker compose`. When running the service directly,
+export the variables in your shell first (e.g. via a zsh dotenv plugin or
+`export $(grep -v '^#' .env | xargs)`).
 
 Set `NEXUS_LOG_ENV=development` for human-readable log output (default is JSON).
 

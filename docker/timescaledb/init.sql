@@ -1,5 +1,9 @@
--- TimescaleDB schema for nexus-ingestion
--- Run against the nexus database after TimescaleDB extension is enabled
+-- TimescaleDB schema for nexus-ingestion.
+-- Mounted into /docker-entrypoint-initdb.d/ by Docker Compose.
+-- Runs automatically on first container startup; skipped when volume already contains data.
+-- All statements are idempotent — safe to run manually against an existing database.
+
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
 -- Market events hypertable
 CREATE TABLE IF NOT EXISTS market_events (
