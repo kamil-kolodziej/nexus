@@ -1,17 +1,16 @@
 # Nexus
 
-A fully automated multi-asset trading platform built around a continuously running **probability matrix** — a live weighted consensus engine that combines signals from multiple strategy types (technical, ML, sentiment, on-chain, statistical, arbitrage) into a single composite score per asset, then acts when confidence and confirmation thresholds are met.
+A fully automated multi-asset trading platform with seconds-level execution. Multiple pluggable weighted strategies — technical, ML, sentiment, on-chain, statistical, arbitrage — run independently and produce signals. A signal aggregation layer combines those signals into trade decisions, which then pass through a 5-layer risk manager before reaching the execution engine.
 
 ## What makes it different
 
 Most trading platforms run one strategy at a time, or let multiple strategies operate independently without coordinating. Nexus takes a different approach:
 
 - Every strategy votes with a confidence score (0.0–1.0) and a direction (BUY/SELL/HOLD)
-- Signals decay exponentially toward their expiry — stale views carry less weight
-- When strategies disagree, a conflict penalty dampens overall confidence rather than letting one side win
-- A confirmation window prevents acting on momentary spikes
-- Strategy weights are configurable and optionally adaptive — a meta-strategy tracks per-strategy accuracy over time and adjusts weights within configurable bounds
-- The live probability matrix is the primary UI: you can see exactly what the system believes about each asset right now, and why
+- Strategies are scoped to trading horizons (SCALP, INTRADAY, SWING, POSITION) — each horizon is independent, so a SCALP SELL and a SWING BUY on the same asset can coexist as separate positions
+- Strategy weights are configurable per `(strategy, horizon)` pair and apply immediately from the dashboard
+- The aggregation layer is designed as a swappable service — the public implementation is deliberately simple; you can drop in your own aggregation logic by subclassing `TradeIntentService` without changing anything else
+- Same code paths for live trading, paper trading, and backtesting — no divergence between what was backtested and what runs live
 
 ## Architecture
 
@@ -20,7 +19,7 @@ Event-driven microservices, all Python, deployed via Docker Compose.
 ```
 Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per strategy)
                                                           ↓ Signal
-                                               nexus-aggregator (probability loop)
+                                               nexus-aggregator (signal aggregation)
                                                           ↓ TradeIntent
                                                   nexus-risk (5-layer validation)
                                                           ↓
@@ -38,26 +37,26 @@ Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per s
 | `nexus-common` | Shared types: `MarketEvent`, `Signal`, `TradeIntent`, serialization |
 | `nexus-ingestion` | Data source adapters: exchanges (ccxt.pro WebSocket) and news (RSS). Publishes `MarketEvent` and `NewsArticle` events to Redis Streams |
 | `nexus-strategies` | Strategy interface, built-in strategies, Strategy Manager with hot-reload |
-| `nexus-aggregator` | Signal aggregation + probability loop (NumPy), emits `TradeIntent` |
+| `nexus-aggregator` | Signal aggregation service, emits `TradeIntent` |
 | `nexus-risk` | 5-layer risk validation, progressive state machine |
 | `nexus-executor` | Order lifecycle, smart routing, position tracking (ccxt + ib_insync) |
 | `nexus-api` | FastAPI backend for the dashboard |
 | `nexus-backtest` | Backtesting engine with simulated executor |
 | `dashboard` | React + TypeScript frontend |
 
-### Probability Matrix
+### Signal Aggregation
 
-The aggregator maintains one row per tracked asset, updated on every new signal and every 100–500ms:
+The aggregator tracks active signals per `(asset, horizon)` and emits a `TradeIntent` when the strongest signal exceeds a configurable confidence threshold. The dashboard shows the current signal state per asset:
 
 ```
 Asset       | Score  | Direction | Active Signals | Strongest Signal    | Updated
-BTC/USDT    | +0.73  | BUY       | 5/8            | ML Model (0.91)     | 12s ago
-ETH/USDT    | -0.42  | SELL      | 3/8            | Sentiment (-0.88)   | 3s ago
-AAPL        | +0.15  | HOLD      | 2/6            | Technical (0.31)    | 45s ago
-EUR/USD     | +0.61  | BUY       | 4/7            | Arbitrage (0.85)    | 1s ago
+BTC/USDT    | +0.91  | BUY       | 3              | Technical (0.91)    | 12s ago
+ETH/USDT    | -0.88  | SELL      | 2              | Sentiment (-0.88)   | 3s ago
+AAPL        | +0.31  | HOLD      | 1              | Technical (0.31)    | 45s ago
+EUR/USD     | +0.85  | BUY       | 2              | Arbitrage (0.85)    | 1s ago
 ```
 
-Score range: **-1.0 (strong sell)** to **+1.0 (strong buy)**. A `TradeIntent` is emitted when the score exceeds a threshold and stays there for the confirmation window.
+Score range: **-1.0 (strong sell)** to **+1.0 (strong buy)**. The aggregator is a swappable service — implement `TradeIntentService` to replace the default logic with your own.
 
 ### Risk State Machine
 
@@ -73,7 +72,7 @@ Position sizes are reduced at each stage (50% in CAUTIOUS, 25% in RESTRICTED) an
 
 The backtesting engine replays historical data through the **same strategy, aggregation, and risk code** — only the executor is swapped for a simulated implementation. No separate backtesting code paths that can diverge from production behavior.
 
-Modes: historical replay, walk-forward analysis, Monte Carlo simulation, parameter sweep, strategy comparison.
+Modes: historical replay, walk-forward analysis, strategy comparison.
 
 ## Tech stack
 

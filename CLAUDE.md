@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Nexus Is
 
-A fully automated multi-asset trading platform with seconds-level execution. Multiple pluggable weighted strategies (technical, ML, sentiment, arbitrage, statistical, rule-based) are combined into a continuously running probability loop that emits trade decisions. Supports paper trading and backtesting through the **same code paths** as live trading — the only difference is the executor implementation.
+A fully automated multi-asset trading platform with seconds-level execution. Multiple pluggable weighted strategies (technical, ML, sentiment, arbitrage, statistical, rule-based) independently produce signals that feed a signal aggregation layer which emits trade decisions. Supports paper trading and backtesting through the **same code paths** as live trading — the only difference is the executor implementation.
 
 ## Planned Monorepo Structure
 
@@ -14,7 +14,7 @@ packages/
   nexus-ingestion/    ← data source adapters service                                    [EXISTS]
   nexus-exchange/     ← ExchangeConnector protocol + ccxt/ib_insync implementations
   nexus-strategies/   ← Strategy interface, built-in strategies, Strategy Manager
-  nexus-aggregator/   ← signal aggregation + probability loop (NumPy)
+  nexus-aggregator/   ← signal aggregation service (consumes Signal, emits TradeIntent)
   nexus-risk/         ← Risk Manager, 5-layer safety, state machine
   nexus-executor/     ← Execution engine, order lifecycle, position tracker
   nexus-api/          ← FastAPI backend for dashboard
@@ -29,7 +29,7 @@ dashboard/            ← React + TypeScript frontend
 Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per strategy process)
                                         │                                     ↓ Signal
                                         └─→ nexus-sentiment (NewsArticle → SentimentScore → Redis Streams → nexus-strategies)
-                                               nexus-aggregator (NumPy probability loop)
+                                               nexus-aggregator (signal aggregation)
                                                           ↓ TradeIntent
                                                   nexus-risk (5-layer validation)
                                                           ↓
@@ -132,7 +132,7 @@ Adapters never import publishers or writers directly. This same callback-injecti
 
 - **Redis Pub/Sub** — real-time market data notifications (ticks, order books) where minimal latency matters and message loss is acceptable
 - **Redis Streams with consumer groups** — durable delivery for trade intents and risk decisions (at-least-once, replayable)
-- **Redis as hot state cache** — current prices, order books, positions, probability matrix
+- **Redis as hot state cache** — current prices, order books, positions, active signals
 
 `RedisPublisher` buffers events in a bounded deque on disconnect and flushes via pipeline on reconnect. `HealthPublisher` does **not** buffer — alerts are dropped when Redis is unavailable to avoid circular dependencies.
 
@@ -177,5 +177,5 @@ The backtesting engine runs identical strategy, aggregation, and risk code. Only
 ## Storage
 
 - **TimescaleDB** — all market events, trade history, audit trail, backtest queries. Schema at `docker/timescaledb/init.sql` (mounted into TimescaleDB via Docker Compose on first startup). Writes use `asyncpg.copy_records_to_table` (no ORM in the hot path).
-- **Redis** — hot state (prices, positions, probability matrix)
+- **Redis** — hot state (prices, positions, active signals)
 - **ClickHouse** — planned for large-scale analytics and reporting
