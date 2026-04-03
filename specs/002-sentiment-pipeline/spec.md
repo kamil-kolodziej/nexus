@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-sentiment-pipeline`
 **Created**: 2026-04-01
-**Status**: Draft
+**Status**: Implemented
 **Input**: A standalone Python asyncio service that consumes NewsArticle events from the nexus:news-events Redis Stream, runs NLP inference to produce SentimentScore events, and publishes them to nexus:sentiment-events.
 
 ## Clarifications

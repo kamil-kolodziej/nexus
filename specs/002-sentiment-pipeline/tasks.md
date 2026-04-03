@@ -17,9 +17,9 @@
 
 **Purpose**: Create the `nexus-sentiment` package skeleton and shared infrastructure changes
 
-- [ ] T001 Create packages/nexus-sentiment/ directory tree with pyproject.toml (dependencies: nexus-common, redis[hiredis], pydantic, pydantic-settings, vaderSentiment, asyncpg, fastapi, uvicorn, structlog; extras: [finbert] for transformers+torch; [dev] for pytest, pytest-asyncio, hypothesis, syrupy, httpx, testcontainers), all __init__.py files, and tests/ subdirectories per plan.md project structure
-- [ ] T002 [P] Add sentiment_scores hypertable, time index, and asset+time composite index to docker/timescaledb/init.sql per research.md §8 schema
-- [ ] T003 [P] Update config.example.toml with [sentiment] section showing all SentimentConfig fields and defaults (processor_type, active_assets, asset_dictionary_path, health_port, pending_claim_threshold, claim_sweep_interval, max_fan_out, output/health stream names, batch_size, flush_interval)
+- [X] T001 Create packages/nexus-sentiment/ directory tree with pyproject.toml (dependencies: nexus-common, redis[hiredis], pydantic, pydantic-settings, vaderSentiment, asyncpg, fastapi, uvicorn, structlog; extras: [finbert] for transformers+torch; [dev] for pytest, pytest-asyncio, hypothesis, syrupy, httpx, testcontainers), all __init__.py files, and tests/ subdirectories per plan.md project structure
+- [X] T002 [P] Add sentiment_scores hypertable, time index, and asset+time composite index to docker/timescaledb/init.sql per research.md §8 schema
+- [X] T003 [P] Update config.example.toml with [sentiment] section showing all SentimentConfig fields and defaults (processor_type, active_assets, asset_dictionary_path, health_port, pending_claim_threshold, claim_sweep_interval, max_fan_out, output/health stream names, batch_size, flush_interval)
 
 ---
 
@@ -29,15 +29,15 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Add SENTIMENT_SCORE = "SENTIMENT_SCORE" to EventType StrEnum in packages/nexus-common/nexus_common/schemas/enums.py
-- [ ] T005 Add SentimentScore pydantic model (article_url, asset, score, confidence, sentiment_label, model_id with validators per data-model.md) and register EventType.SENTIMENT_SCORE → SentimentScore in PAYLOAD_TYPE_MAP in packages/nexus-common/nexus_common/schemas/market_event.py
-- [ ] T006 [P] Contract snapshot test for SentimentScore serialization stability (JSON round-trip, Redis field encoding via MarketEvent.to_redis_fields/from_redis_fields) in packages/nexus-sentiment/tests/contract/test_sentiment_schemas.py
-- [ ] T007 [P] Create SentimentConfig pydantic-settings model with all fields from data-model.md (processor_type, redis_url, input/output/health streams, consumer_group, block_timeout, pending_claim_threshold, claim_sweep_interval, active_assets, asset_dictionary_path, output_maxlen, health_maxlen, timescaledb_dsn, batch_size, flush_interval, health_host, health_port, max_fan_out, log_env) and TOML [sentiment] section + NEXUS_* env var precedence in packages/nexus-sentiment/nexus_sentiment/config.py
-- [ ] T008 [P] Create BaseSentimentProcessor ABC (async load(), sync analyze(text) → SentimentResult, async close(), model_id property) and SentimentResult NamedTuple (label, score, confidence) in packages/nexus-sentiment/nexus_sentiment/processors/base.py
-- [ ] T009 [P] Create RedisPublisher with XADD to output stream, MAXLEN ~50000 approximate trimming, disconnect buffering in bounded deque, and pipeline flush on reconnect in packages/nexus-sentiment/nexus_sentiment/publishers/redis_publisher.py
-- [ ] T010 [P] Create HealthPublisher (fire-and-forget to nexus:sentiment-health-events, MAXLEN ~5000, no buffering on disconnect per contract) in packages/nexus-sentiment/nexus_sentiment/publishers/health_publisher.py
-- [ ] T011 [P] Create TimescaleWriter with asyncio.Queue, asyncpg.copy_records_to_table batch writes for sentiment_scores table (time, source, asset, article_url, score, confidence, sentiment_label, model_id, schema_version), configurable batch_size and flush_interval in packages/nexus-sentiment/nexus_sentiment/persistence/timescale_writer.py
-- [ ] T012 [P] Create SentimentHealth pydantic response model (status, processor type/state/model_id, events_processed, errors) and FastAPI HealthEndpoint class with GET /health reading in-memory counters only in packages/nexus-sentiment/nexus_sentiment/monitoring/health_endpoint.py
+- [X] T004 Add SENTIMENT_SCORE = "SENTIMENT_SCORE" to EventType StrEnum in packages/nexus-common/nexus_common/schemas/enums.py
+- [X] T005 Add SentimentScore pydantic model (article_url, asset, score, confidence, sentiment_label, model_id with validators per data-model.md) and register EventType.SENTIMENT_SCORE → SentimentScore in PAYLOAD_TYPE_MAP in packages/nexus-common/nexus_common/schemas/market_event.py
+- [X] T006 [P] Contract snapshot test for SentimentScore serialization stability (JSON round-trip, Redis field encoding via MarketEvent.to_redis_fields/from_redis_fields) in packages/nexus-sentiment/tests/contract/test_sentiment_schemas.py
+- [X] T007 [P] Create SentimentConfig pydantic-settings model with all fields from data-model.md (processor_type, redis_url, input/output/health streams, consumer_group, block_timeout, pending_claim_threshold, claim_sweep_interval, active_assets, asset_dictionary_path, output_maxlen, health_maxlen, timescaledb_dsn, batch_size, flush_interval, health_host, health_port, max_fan_out, log_env) and TOML [sentiment] section + NEXUS_* env var precedence in packages/nexus-sentiment/nexus_sentiment/config.py
+- [X] T008 [P] Create BaseSentimentProcessor ABC (async load(), sync analyze(text) → SentimentResult, async close(), model_id property) and SentimentResult NamedTuple (label, score, confidence) in packages/nexus-sentiment/nexus_sentiment/processors/base.py
+- [X] T009 [P] Create RedisPublisher with XADD to output stream, MAXLEN ~50000 approximate trimming, disconnect buffering in bounded deque, and pipeline flush on reconnect in packages/nexus-sentiment/nexus_sentiment/publishers/redis_publisher.py
+- [X] T010 [P] Create HealthPublisher (fire-and-forget to nexus:sentiment-health-events, MAXLEN ~5000, no buffering on disconnect per contract) in packages/nexus-sentiment/nexus_sentiment/publishers/health_publisher.py
+- [X] T011 [P] Create TimescaleWriter with asyncio.Queue, asyncpg.copy_records_to_table batch writes for sentiment_scores table (time, source, asset, article_url, score, confidence, sentiment_label, model_id, schema_version), configurable batch_size and flush_interval in packages/nexus-sentiment/nexus_sentiment/persistence/timescale_writer.py
+- [X] T012 [P] Create SentimentHealth pydantic response model (status, processor type/state/model_id, events_processed, errors) and FastAPI HealthEndpoint class with GET /health reading in-memory counters only in packages/nexus-sentiment/nexus_sentiment/monitoring/health_endpoint.py
 
 **Checkpoint**: Foundation ready — user story implementation can now begin
 
@@ -53,15 +53,15 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T013 [P] [US1] Property-based test (hypothesis) for VADER score ∈ [-1.0, +1.0] and confidence ∈ [0.0, 1.0] across random text inputs, plus label threshold correctness (compound ≥ 0.05 → positive, ≤ -0.05 → negative, else neutral) in packages/nexus-sentiment/tests/unit/test_vader_processor.py
+- [X] T013 [P] [US1] Property-based test (hypothesis) for VADER score ∈ [-1.0, +1.0] and confidence ∈ [0.0, 1.0] across random text inputs, plus label threshold correctness (compound ≥ 0.05 → positive, ≤ -0.05 → negative, else neutral) in packages/nexus-sentiment/tests/unit/test_vader_processor.py
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] Implement VaderProcessor: load() instantiates SentimentIntensityAnalyzer, analyze(text) calls polarity_scores and maps compound → score/confidence/label per research.md §1, model_id returns "vader:{version}" in packages/nexus-sentiment/nexus_sentiment/processors/vader_processor.py
-- [ ] T015 [US1] Implement SentimentService: create consumer group (XGROUP CREATE ... $ MKSTREAM, ignore BUSYGROUP), consumer loop with XREADGROUP COUNT 1 BLOCK 5000, parse MarketEvent envelope, validate NewsArticle payload, combine headline + body_summary text (FR-002), run VaderProcessor.analyze() in asyncio.run_in_executor, build SentimentScore per asset from related_assets, wrap in MarketEvent envelope (source, asset, timestamp, event_type=SENTIMENT_SCORE), publish via RedisPublisher, queue to TimescaleWriter, XACK on success, update health counters in packages/nexus-sentiment/nexus_sentiment/service.py
-- [ ] T016 [US1] Implement main.py: parse args, load SentimentConfig, call configure_logging, create processor + publishers + writer + health endpoint, wire SentimentService with callback injection, start consumer loop and health endpoint as independent asyncio.create_task with add_done_callback (FR-009, no TaskGroup), register SIGTERM/SIGINT handlers for graceful shutdown (stop flag, flush writer, close processor) in packages/nexus-sentiment/nexus_sentiment/main.py
-- [ ] T017 [P] [US1] Unit test for SentimentService: mock Redis + processor, verify valid single-asset article → one SentimentScore published with correct fields + XACK called; verify MarketEvent envelope has event_type=SENTIMENT_SCORE and source="nexus-sentiment:vader" in packages/nexus-sentiment/tests/unit/test_service.py
-- [ ] T018 [P] [US1] Unit test for health endpoint: verify GET /health returns SentimentHealth JSON with status/processor/events_processed/errors, response < 200ms in packages/nexus-sentiment/tests/unit/test_health_endpoint.py
+- [X] T014 [US1] Implement VaderProcessor: load() instantiates SentimentIntensityAnalyzer, analyze(text) calls polarity_scores and maps compound → score/confidence/label per research.md §1, model_id returns "vader:{version}" in packages/nexus-sentiment/nexus_sentiment/processors/vader_processor.py
+- [X] T015 [US1] Implement SentimentService: create consumer group (XGROUP CREATE ... $ MKSTREAM, ignore BUSYGROUP), consumer loop with XREADGROUP COUNT 1 BLOCK 5000, parse MarketEvent envelope, validate NewsArticle payload, combine headline + body_summary text (FR-002), run VaderProcessor.analyze() in asyncio.run_in_executor, build SentimentScore per asset from related_assets, wrap in MarketEvent envelope (source, asset, timestamp, event_type=SENTIMENT_SCORE), publish via RedisPublisher, queue to TimescaleWriter, XACK on success, update health counters in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T016 [US1] Implement main.py: parse args, load SentimentConfig, call configure_logging, create processor + publishers + writer + health endpoint, wire SentimentService with callback injection, start consumer loop and health endpoint as independent asyncio.create_task with add_done_callback (FR-009, no TaskGroup), register SIGTERM/SIGINT handlers for graceful shutdown (stop flag, flush writer, close processor) in packages/nexus-sentiment/nexus_sentiment/main.py
+- [X] T017 [P] [US1] Unit test for SentimentService: mock Redis + processor, verify valid single-asset article → one SentimentScore published with correct fields + XACK called; verify MarketEvent envelope has event_type=SENTIMENT_SCORE and source="nexus-sentiment:vader" in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T018 [P] [US1] Unit test for health endpoint: verify GET /health returns SentimentHealth JSON with status/processor/events_processed/errors, response < 200ms in packages/nexus-sentiment/tests/unit/test_health_endpoint.py
 
 **Checkpoint**: US1 complete — VADER sentiment scoring works end-to-end for single-asset articles. Validate with quickstart.md §Verify.
 
@@ -77,11 +77,11 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T019 [P] [US2] Unit test for fan-out: multi-asset article → N SentimentScore events, duplicates in related_assets → deduplicated, all events share same score/confidence/label, XACK only after all publishes succeed in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T019 [P] [US2] Unit test for fan-out: multi-asset article → N SentimentScore events, duplicates in related_assets → deduplicated, all events share same score/confidence/label, XACK only after all publishes succeed in packages/nexus-sentiment/tests/unit/test_service.py
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Add fan-out loop to SentimentService: iterate deduplicated effective asset list, publish one SentimentScore per unique asset (all sharing inference result), XACK only after all publishes succeed (FR-006); if any publish fails the source message remains pending in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T020 [US2] Add fan-out loop to SentimentService: iterate deduplicated effective asset list, publish one SentimentScore per unique asset (all sharing inference result), XACK only after all publishes succeed (FR-006); if any publish fails the source message remains pending in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: US1+US2 complete — single and multi-asset articles produce correct per-asset scores
 
@@ -95,13 +95,13 @@
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T021 [P] [US3] Unit test for AssetExtractor: dictionary loading from YAML, word-boundary matching (case-insensitive), active_assets filtering (suppresses inactive), merge with related_assets deduplication, max_fan_out cap, missing dictionary file → error in packages/nexus-sentiment/tests/unit/test_asset_extractor.py
+- [X] T021 [P] [US3] Unit test for AssetExtractor: dictionary loading from YAML, word-boundary matching (case-insensitive), active_assets filtering (suppresses inactive), merge with related_assets deduplication, max_fan_out cap, missing dictionary file → error in packages/nexus-sentiment/tests/unit/test_asset_extractor.py
 
 ### Implementation for User Story 3
 
-- [ ] T022 [P] [US3] Create data/asset_dictionary.yaml with version field, initial assets (BTC/USDT with aliases [Bitcoin, BTC, bitcoin], ETH/USDT with aliases [Ethereum, ETH, Ether]), and sectors (sector:crypto with keywords [crypto market, cryptocurrency market, crypto], sector:stocks with keywords [stock market, equities market, stocks]) per research.md §5
-- [ ] T023 [US3] Implement AssetExtractor: load YAML dictionary at init, compile case-insensitive \b{alias}\b regex per alias/keyword, extract(text, related_assets) → deduplicated effective asset list filtered against active_assets set, enforce max_fan_out cap (drop excess by insertion order, log warning), raise on missing/malformed dictionary in packages/nexus-sentiment/nexus_sentiment/extraction/asset_extractor.py
-- [ ] T024 [US3] Integrate AssetExtractor into SentimentService: run extraction on combined text before fan-out, merge with related_assets, pass effective asset list to fan-out loop; add dictionary path and active_assets from config; exit at startup if dictionary missing/malformed (FR-017) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T022 [P] [US3] Create data/asset_dictionary.yaml with version field, initial assets (BTC/USDT with aliases [Bitcoin, BTC, bitcoin], ETH/USDT with aliases [Ethereum, ETH, Ether]), and sectors (sector:crypto with keywords [crypto market, cryptocurrency market, crypto], sector:stocks with keywords [stock market, equities market, stocks]) per research.md §5
+- [X] T023 [US3] Implement AssetExtractor: load YAML dictionary at init, compile case-insensitive \b{alias}\b regex per alias/keyword, extract(text, related_assets) → deduplicated effective asset list filtered against active_assets set, enforce max_fan_out cap (drop excess by insertion order, log warning), raise on missing/malformed dictionary in packages/nexus-sentiment/nexus_sentiment/extraction/asset_extractor.py
+- [X] T024 [US3] Integrate AssetExtractor into SentimentService: run extraction on combined text before fan-out, merge with related_assets, pass effective asset list to fan-out loop; add dictionary path and active_assets from config; exit at startup if dictionary missing/malformed (FR-017) in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: US1+US2+US3 complete — asset extraction fills gaps when upstream does not tag articles
 
@@ -117,11 +117,11 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T025 [P] [US4] Unit test for general market sentiment: article with empty related_assets and no dictionary matches → exactly 1 SentimentScore with asset=None; verify MarketEvent.asset is also None in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T025 [P] [US4] Unit test for general market sentiment: article with empty related_assets and no dictionary matches → exactly 1 SentimentScore with asset=None; verify MarketEvent.asset is also None in packages/nexus-sentiment/tests/unit/test_service.py
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Add asset=None fallback path to SentimentService: when effective asset list is empty after extraction + related_assets merge, publish single SentimentScore with asset=None and MarketEvent.asset=None (FR-004) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T026 [US4] Add asset=None fallback path to SentimentService: when effective asset list is empty after extraction + related_assets merge, publish single SentimentScore with asset=None and MarketEvent.asset=None (FR-004) in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: US1–US4 complete — all article types produce appropriate sentiment scores
 
@@ -137,11 +137,11 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T027 [P] [US5] Unit test for sector extraction and tagging: article with "crypto market" → SentimentScore with asset="sector:crypto"; article with both "Bitcoin" and "crypto market" → 2 events (BTC/USDT + sector:crypto); sector: prefix distinguishable from ccxt symbols in packages/nexus-sentiment/tests/unit/test_asset_extractor.py
+- [X] T027 [P] [US5] Unit test for sector extraction and tagging: article with "crypto market" → SentimentScore with asset="sector:crypto"; article with both "Bitcoin" and "crypto market" → 2 events (BTC/USDT + sector:crypto); sector: prefix distinguishable from ccxt symbols in packages/nexus-sentiment/tests/unit/test_asset_extractor.py
 
 ### Implementation for User Story 5
 
-- [ ] T028 [US5] Verify sector: prefix pass-through in SentimentService fan-out (should require no code changes if extraction + fan-out already handle arbitrary strings); add additional sector entries to data/asset_dictionary.yaml if needed in packages/nexus-sentiment/nexus_sentiment/service.py and data/asset_dictionary.yaml
+- [X] T028 [US5] Verify sector: prefix pass-through in SentimentService fan-out (should require no code changes if extraction + fan-out already handle arbitrary strings); add additional sector entries to data/asset_dictionary.yaml if needed in packages/nexus-sentiment/nexus_sentiment/service.py and data/asset_dictionary.yaml
 
 **Checkpoint**: US1–US5 complete — individual assets and sector groups are both tagged correctly
 
@@ -157,15 +157,15 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T029 [P] [US6] Unit test for inference error resilience: mock processor to raise on article N, verify MODEL_INFERENCE_ERROR health alert emitted, message NOT XACKed, error counter incremented, article N+1 processes normally in packages/nexus-sentiment/tests/unit/test_service.py
-- [ ] T030 [P] [US6] Unit test for dead-letter claim sweep: mock XAUTOCLAIM returning a stale message, verify DEAD_LETTER_CLAIMED health alert emitted and message XACKed in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T029 [P] [US6] Unit test for inference error resilience: mock processor to raise on article N, verify MODEL_INFERENCE_ERROR health alert emitted, message NOT XACKed, error counter incremented, article N+1 processes normally in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T030 [P] [US6] Unit test for dead-letter claim sweep: mock XAUTOCLAIM returning a stale message, verify DEAD_LETTER_CLAIMED health alert emitted and message XACKed in packages/nexus-sentiment/tests/unit/test_service.py
 
 ### Implementation for User Story 6
 
-- [ ] T031 [US6] Add inference error handling around NLP analyze() call: catch exceptions, emit MODEL_INFERENCE_ERROR health alert via HealthPublisher, do NOT XACK (leave pending for retry/claim), increment error counter, log with article_url and error detail, continue consumer loop (SRC-004) in packages/nexus-sentiment/nexus_sentiment/service.py
-- [ ] T032 [US6] Add malformed payload handling: catch MarketEvent/NewsArticle pydantic ValidationError during parse, log warning with message ID and error, XACK and drop (FR-014, distinct from inference errors which leave message pending) in packages/nexus-sentiment/nexus_sentiment/service.py
-- [ ] T033 [US6] Add empty-text edge case: when headline and body_summary are both empty, log warning with article_url, publish SentimentScore with score=0.0, confidence=0.0, sentiment_label="neutral", and XACK (zero-signal, not an error) in packages/nexus-sentiment/nexus_sentiment/service.py
-- [ ] T034 [US6] Implement dead-letter claim sweep as separate asyncio.create_task: run XAUTOCLAIM periodically at claim_sweep_interval (default 60s) for messages pending > pending_claim_threshold (default 300s), log each as dead-letter warning, emit DEAD_LETTER_CLAIMED health alert, XACK in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T031 [US6] Add inference error handling around NLP analyze() call: catch exceptions, emit MODEL_INFERENCE_ERROR health alert via HealthPublisher, do NOT XACK (leave pending for retry/claim), increment error counter, log with article_url and error detail, continue consumer loop (SRC-004) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T032 [US6] Add malformed payload handling: catch MarketEvent/NewsArticle pydantic ValidationError during parse, log warning with message ID and error, XACK and drop (FR-014, distinct from inference errors which leave message pending) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T033 [US6] Add empty-text edge case: when headline and body_summary are both empty, log warning with article_url, publish SentimentScore with score=0.0, confidence=0.0, sentiment_label="neutral", and XACK (zero-signal, not an error) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T034 [US6] Implement dead-letter claim sweep as separate asyncio.create_task: run XAUTOCLAIM periodically at claim_sweep_interval (default 60s) for messages pending > pending_claim_threshold (default 300s), log each as dead-letter warning, emit DEAD_LETTER_CLAIMED health alert, XACK in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: US1–US6 complete — service is resilient to bad inputs, inference errors, and stale messages
 
@@ -179,12 +179,12 @@
 
 ### Tests for User Story 7 (REQUIRED — SC-005 score/confidence ranges) ⚠️
 
-- [ ] T035 [P] [US7] Property-based test (hypothesis) for FinBERT score ∈ [-1.0, +1.0] and confidence ∈ [0.0, 1.0] ranges, plus ImportError guard when transformers/torch missing, in packages/nexus-sentiment/tests/unit/test_finbert_processor.py
+- [X] T035 [P] [US7] Property-based test (hypothesis) for FinBERT score ∈ [-1.0, +1.0] and confidence ∈ [0.0, 1.0] ranges, plus ImportError guard when transformers/torch missing, in packages/nexus-sentiment/tests/unit/test_finbert_processor.py
 
 ### Implementation for User Story 7
 
-- [ ] T036 [US7] Implement FinBertProcessor: load ProsusAI/finbert via transformers.pipeline("text-classification", top_k=3), map softmax probs → score (positive−negative), confidence (max prob), label; ImportError on missing transformers/torch with clear message; model_id returns "finbert:{version}" per research.md §2 in packages/nexus-sentiment/nexus_sentiment/processors/finbert_processor.py
-- [ ] T037 [US7] Add processor factory to SentimentService or main.py: select VaderProcessor or FinBertProcessor based on config.processor_type; raise clear error with exit(1) for unknown processor_type or missing FinBERT dependencies (SRC-005) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T036 [US7] Implement FinBertProcessor: load ProsusAI/finbert via transformers.pipeline("text-classification", top_k=3), map softmax probs → score (positive−negative), confidence (max prob), label; ImportError on missing transformers/torch with clear message; model_id returns "finbert:{version}" per research.md §2 in packages/nexus-sentiment/nexus_sentiment/processors/finbert_processor.py
+- [X] T037 [US7] Add processor factory to SentimentService or main.py: select VaderProcessor or FinBertProcessor based on config.processor_type; raise clear error with exit(1) for unknown processor_type or missing FinBERT dependencies (SRC-005) in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: All 7 user stories complete — full sentiment pipeline operational
 
@@ -194,14 +194,14 @@
 
 **Purpose**: Config tests, Docker deployment, integration tests, end-to-end validation
 
-- [ ] T038 [P] Unit test for SentimentConfig: TOML loading, NEXUS_* env var precedence, defaults, credential exclusion from [sentiment] section in packages/nexus-sentiment/tests/unit/test_config.py
-- [ ] T039 [P] Unit test for SRC-003/SC-006 compliance: verify SentimentScore rejects model_id values containing '/' (file paths) or credential-like patterns; verify serialized MarketEvent payloads and HealthAlert messages contain no API keys, file paths, or PII in packages/nexus-sentiment/tests/unit/test_service.py
-- [ ] T040 [P] Unit test for SC-007 task independence: mock health endpoint to raise during startup or operation, verify consumer loop continues processing normally; mock consumer loop to crash, verify health endpoint still responds in packages/nexus-sentiment/tests/unit/test_service.py
-- [ ] T041 [P] Create Dockerfile for nexus-sentiment (multi-stage build, Python 3.11+, pip install nexus-common + nexus-sentiment, ENTRYPOINT python -m nexus_sentiment.main) in packages/nexus-sentiment/Dockerfile
-- [ ] T042 [P] Update docker-compose.dev.yml to include nexus-sentiment service with dependency on redis and timescaledb, volume mount for config.toml and data/
-- [ ] T043 [P] Integration test for Redis Stream consumer/producer round-trip: publish NewsArticle to nexus:news-events via testcontainers Redis, verify SentimentScore appears in nexus:sentiment-events; include latency assertion ≤1s for VADER (SC-001) in packages/nexus-sentiment/tests/integration/test_redis_consumer.py
-- [ ] T044 [P] Integration test for TimescaleDB persistence: verify SentimentScore batch write to sentiment_scores table via testcontainers PostgreSQL in packages/nexus-sentiment/tests/integration/test_timescale_persistence.py
-- [ ] T045 Run quickstart.md end-to-end validation: install, configure, start service, publish test article via redis-cli, verify SentimentScore output and health endpoint response
+- [X] T038 [P] Unit test for SentimentConfig: TOML loading, NEXUS_* env var precedence, defaults, credential exclusion from [sentiment] section in packages/nexus-sentiment/tests/unit/test_config.py
+- [X] T039 [P] Unit test for SRC-003/SC-006 compliance: verify SentimentScore rejects model_id values containing '/' (file paths) or credential-like patterns; verify serialized MarketEvent payloads and HealthAlert messages contain no API keys, file paths, or PII in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T040 [P] Unit test for SC-007 task independence: mock health endpoint to raise during startup or operation, verify consumer loop continues processing normally; mock consumer loop to crash, verify health endpoint still responds in packages/nexus-sentiment/tests/unit/test_service.py
+- [X] T041 [P] Create Dockerfile for nexus-sentiment (multi-stage build, Python 3.11+, pip install nexus-common + nexus-sentiment, ENTRYPOINT python -m nexus_sentiment.main) in packages/nexus-sentiment/Dockerfile
+- [X] T042 [P] Update docker-compose.dev.yml to include nexus-sentiment service with dependency on redis and timescaledb, volume mount for config.toml and data/
+- [X] T043 [P] Integration test for Redis Stream consumer/producer round-trip: publish NewsArticle to nexus:news-events via testcontainers Redis, verify SentimentScore appears in nexus:sentiment-events; include latency assertion ≤1s for VADER (SC-001) in packages/nexus-sentiment/tests/integration/test_redis_consumer.py
+- [X] T044 [P] Integration test for TimescaleDB persistence: verify SentimentScore batch write to sentiment_scores table via testcontainers PostgreSQL in packages/nexus-sentiment/tests/integration/test_timescale_persistence.py
+- [X] T045 Run quickstart.md end-to-end validation: install, configure, start service, publish test article via redis-cli, verify SentimentScore output and health endpoint response
 
 ---
 

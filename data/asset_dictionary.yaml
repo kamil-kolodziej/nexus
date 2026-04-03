@@ -1,0 +1,29 @@
+version: "1.0.0"
+
+assets:
+  BTC/USDT:
+    aliases:
+      - Bitcoin
+      - BTC
+      - bitcoin
+  ETH/USDT:
+    aliases:
+      - Ethereum
+      - ETH
+      - Ether
+  SOL/USDT:
+    aliases:
+      - Solana
+      - SOL
+
+sectors:
+  "sector:crypto":
+    keywords:
+      - crypto market
+      - cryptocurrency market
+      - crypto
+  "sector:stocks":
+    keywords:
+      - stock market
+      - equities market
+      - stocks

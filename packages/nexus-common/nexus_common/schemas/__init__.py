@@ -7,6 +7,7 @@ from nexus_common.schemas.market_event import (
     MarketEvent,
     NewsArticle,
     OrderBookUpdate,
+    SentimentScore,
     Tick,
     Trade,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "MarketEvent",
     "NewsArticle",
     "OrderBookUpdate",
+    "SentimentScore",
     "Severity",
     "Tick",
     "Trade",
