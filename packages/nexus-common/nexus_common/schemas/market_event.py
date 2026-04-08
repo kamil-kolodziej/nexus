@@ -200,7 +200,7 @@ class MarketEvent(BaseModel):
             "timestamp": self.timestamp.isoformat(),
             "event_type": self.event_type.value,
             "schema_version": self.schema_version,
-            "payload": json.dumps(self.payload),
+            "payload": json.dumps(self.payload, default=str),
         }
 
     @classmethod

@@ -22,6 +22,8 @@ def clear_nexus_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "NEXUS_EXCHANGE_ID",
         "NEXUS_EXCHANGE_SANDBOX",
         "NEXUS_SUBSCRIBED_ASSETS",
+        "NEXUS_EXCHANGE_API_KEY",
+        "NEXUS_EXCHANGE_API_SECRET",
     ]
     for key in keys:
         monkeypatch.delenv(key, raising=False)
