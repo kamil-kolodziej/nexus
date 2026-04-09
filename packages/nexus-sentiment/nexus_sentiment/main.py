@@ -83,6 +83,7 @@ async def run() -> None:
             config.timescaledb_dsn,
             batch_size=config.batch_size,
             flush_interval=config.flush_interval,
+            health_callback=health_publisher.publish,
         )
     except Exception:
         logger.warning("timescale_writer_init_failed", exc_info=True)
