@@ -34,6 +34,7 @@ class FinBertProcessor(BaseSentimentProcessor):
             "text-classification",
             model="ProsusAI/finbert",
             top_k=3,
+            truncation=True,
         )
 
     def analyze(self, text: str) -> SentimentResult:
@@ -42,7 +43,7 @@ class FinBertProcessor(BaseSentimentProcessor):
             msg = "FinBertProcessor not loaded — call load() first"
             raise RuntimeError(msg)
 
-        results = self._pipeline(text[:512])  # FinBERT max 512 tokens
+        results = self._pipeline(text)
         if isinstance(results, list) and results and isinstance(results[0], list):
             results = results[0]
 
@@ -52,16 +53,19 @@ class FinBertProcessor(BaseSentimentProcessor):
 
         pos = probs.get("positive", 0.0)
         neg = probs.get("negative", 0.0)
+        neutral = probs.get("neutral", 0.0)
 
-        score = pos - neg
-        confidence = max(probs.values()) if probs else 0.0
-
-        if score >= 0.05:
+        # Label via softmax argmax over all three classes
+        if pos >= neg and pos >= neutral:
             label = "positive"
-        elif score <= -0.05:
+        elif neg >= pos and neg >= neutral:
             label = "negative"
         else:
             label = "neutral"
+
+        # Signed magnitude for downstream aggregation
+        score = pos - neg
+        confidence = max(probs.values()) if probs else 0.0
 
         return SentimentResult(
             label=label,
