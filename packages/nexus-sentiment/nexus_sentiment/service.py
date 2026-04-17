@@ -265,17 +265,17 @@ class SentimentService:
             )
 
     def _build_effective_assets(self, article: Any, combined_text: str) -> list[str]:
-        """Build deduplicated, filtered effective asset list."""
+        """Build deduplicated, active-asset-filtered effective asset list."""
+        active = set(self._config.active_assets)
         assets: list[str] = []
 
-        # Start with related_assets from the article
+        # related_assets from the article — filter against active_assets
         if article.related_assets:
-            assets.extend(article.related_assets)
+            assets.extend(a for a in article.related_assets if a in active)
 
-        # Run asset extraction if available
+        # AssetExtractor already filters against active_assets internally
         if self._asset_extractor:
-            extracted = self._asset_extractor.extract(combined_text)
-            assets.extend(extracted)
+            assets.extend(self._asset_extractor.extract(combined_text))
 
         # Deduplicate preserving order
         seen: set[str] = set()
@@ -285,20 +285,16 @@ class SentimentService:
                 seen.add(a)
                 unique.append(a)
 
-        # Filter against active_assets
-        active = set(self._config.active_assets)
-        filtered = [a for a in unique if a in active]
-
         # Cap at max_fan_out
-        if len(filtered) > self._config.max_fan_out:
+        if len(unique) > self._config.max_fan_out:
             logger.warning(
                 "max_fan_out_exceeded",
-                total=len(filtered),
+                total=len(unique),
                 max_fan_out=self._config.max_fan_out,
             )
-            filtered = filtered[: self._config.max_fan_out]
+            unique = unique[: self._config.max_fan_out]
 
-        return filtered
+        return unique
 
     async def _claim_sweep_loop(self) -> None:
         """Periodically claim stale pending messages via XAUTOCLAIM."""

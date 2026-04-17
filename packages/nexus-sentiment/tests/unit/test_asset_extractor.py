@@ -82,9 +82,13 @@ class TestAssetExtractor:
             active_assets={"ETH/USDT"},  # BTC not active
         )
         result = extractor.extract("Bitcoin surges")
-        # BTC/USDT extracted but not in active_assets — filtering happens in service
-        # The extractor itself returns all matches; filtering is at service level
+        assert "BTC/USDT" not in result
+
+    def test_no_active_filter_returns_all_matches(self, dictionary_path):
+        extractor = AssetExtractor(dictionary_path, active_assets=set())
+        result = extractor.extract("Bitcoin and Ethereum rally")
         assert "BTC/USDT" in result
+        assert "ETH/USDT" in result
 
     def test_missing_dictionary_raises(self):
         with pytest.raises(FileNotFoundError):

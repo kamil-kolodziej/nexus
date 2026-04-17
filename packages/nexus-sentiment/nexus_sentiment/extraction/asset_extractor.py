@@ -71,13 +71,16 @@ class AssetExtractor:
     def extract(self, text: str) -> list[str]:
         """Extract asset/sector identifiers from text.
 
-        Returns deduplicated list of canonical IDs that match and are in active_assets.
+        Returns deduplicated list of canonical IDs that match. When active_assets
+        was provided, matches not in that set are suppressed.
         """
         seen: set[str] = set()
         result: list[str] = []
 
         for canonical_id, pattern in self._patterns:
             if canonical_id in seen:
+                continue
+            if self._active_assets and canonical_id not in self._active_assets:
                 continue
             if pattern.search(text):
                 seen.add(canonical_id)
