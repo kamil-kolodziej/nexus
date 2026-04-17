@@ -358,6 +358,7 @@ class TestSentimentServiceTaskIndependence:
             health_publisher=health_pub,
         )
         health = service._get_health()
-        assert health.status == "ok"
-        assert health.processor_type == "vader"
-        assert health.events_processed == 0
+        assert health["status"] == "ok"
+        assert health["serviceId"] == "nexus-sentiment"
+        assert "processor:inference" in health["checks"]
+        assert health["checks"]["processor:inference"]["status"] == "ok"

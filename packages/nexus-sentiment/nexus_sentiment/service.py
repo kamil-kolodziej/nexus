@@ -11,8 +11,6 @@ from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
 from nexus_common.schemas.market_event import MarketEvent, SentimentScore
 
-from nexus_sentiment.monitoring.health_endpoint import SentimentHealth
-
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
@@ -52,6 +50,7 @@ class SentimentService:
 
         self._events_processed = 0
         self._errors = 0
+        self._consecutive_inference_errors = 0
         self._running = False
         self._consumer_task: asyncio.Task[None] | None = None
         self._health_task: asyncio.Task[None] | None = None
@@ -197,6 +196,7 @@ class SentimentService:
                 result_label = result.label
                 result_score = result.score
                 result_confidence = result.confidence
+                self._consecutive_inference_errors = 0
             except Exception:
                 logger.error(
                     "inference_error",
@@ -205,6 +205,7 @@ class SentimentService:
                     exc_info=True,
                 )
                 self._errors += 1
+                self._consecutive_inference_errors += 1
                 await self._emit_health_alert(
                     "MODEL_INFERENCE_ERROR",
                     Severity.HIGH,
@@ -347,21 +348,57 @@ class SentimentService:
         )
         await self._health_publisher.publish(alert)
 
-    def _get_health(self) -> SentimentHealth:
-        """Return current health status for the health endpoint."""
-        if self._errors > 0:
-            status = "degraded"
-        else:
-            status = "ok"
+    def _get_health(self) -> dict[str, Any]:
+        """Return RFC-shaped health body. See docs/design § Monitoring."""
+        from importlib.metadata import PackageNotFoundError, version
 
-        return SentimentHealth(
-            status=status,
-            processor_type=self._config.processor_type,
-            processor_state="loaded",
-            model_id=self._processor.model_id,
-            events_processed=self._events_processed,
-            errors=self._errors,
-        )
+        checks: dict[str, dict[str, Any]] = {}
+
+        # Processor: rolling window of consecutive inference failures.
+        if self._consecutive_inference_errors >= 5:
+            checks["processor:inference"] = {
+                "status": "error",
+                "output": f"{self._consecutive_inference_errors} consecutive inference failures",
+                "observedValue": self._consecutive_inference_errors,
+            }
+        else:
+            checks["processor:inference"] = {
+                "status": "ok",
+                "observedValue": self._processor.model_id,
+            }
+
+        # Redis publisher: degraded when disconnected (buffering).
+        redis_connected = getattr(self._redis_publisher, "_connected", True)
+        buffer_size = getattr(self._redis_publisher, "buffer_size", 0)
+        if not redis_connected:
+            checks["redis:publisher"] = {
+                "status": "degraded",
+                "output": f"disconnected, buffering {buffer_size} events",
+                "observedValue": buffer_size,
+            }
+        else:
+            checks["redis:publisher"] = {"status": "ok", "observedValue": buffer_size}
+
+        # TimescaleDB writer (optional).
+        if self._timescale_writer is not None:
+            checks["timescale:writer"] = {"status": "ok"}
+
+        # Top-level status = worst of components.
+        severities = {"ok": 0, "degraded": 1, "error": 2}
+        worst = max((severities[c["status"]] for c in checks.values()), default=0)
+        status = ("ok", "degraded", "error")[worst]
+
+        try:
+            pkg_version = version("nexus-sentiment")
+        except PackageNotFoundError:
+            pkg_version = "unknown"
+
+        return {
+            "status": status,
+            "serviceId": "nexus-sentiment",
+            "version": pkg_version,
+            "checks": checks,
+        }
 
     def _on_consumer_done(self, task: asyncio.Task[None]) -> None:
         """Callback when consumer task completes."""

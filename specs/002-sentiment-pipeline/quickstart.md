@@ -54,14 +54,23 @@ python -m nexus_sentiment.main
 
 ## Verify
 
-1. **Check health endpoint**:
+1. **Check health endpoint** (RFC draft-inadarei `application/health+json`):
    ```bash
    curl http://127.0.0.1:8081/health
    ```
-   Expected:
+   Expected (formatted):
    ```json
-   {"status": "ok", "processor": {"type": "vader", "state": "loaded", "model_id": "vader:3.3.2"}, "events_processed": 0, "errors": 0}
+   {
+     "status": "ok",
+     "serviceId": "nexus-sentiment",
+     "version": "0.1.0",
+     "checks": {
+       "processor:inference": {"status": "ok", "observedValue": "vader:3.3.2"},
+       "redis:publisher":     {"status": "ok", "observedValue": 0}
+     }
+   }
    ```
+   HTTP status is `200` for `ok` / `degraded`, `503` for `error`.
 
 2. **Publish a test article** (via redis-cli):
    ```bash

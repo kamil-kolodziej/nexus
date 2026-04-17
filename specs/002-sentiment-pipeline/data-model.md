@@ -80,15 +80,17 @@
 └──────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────┐
-│              SentimentHealth                          │
-│  (exposed via GET /health, in-memory)                │
+│       Health response (RFC draft-inadarei)           │
+│  (exposed via GET /health, built as dict per-call)   │
 │                                                      │
 │  status: str       ("ok" | "degraded" | "error")     │
-│  processor_type: str   ("vader" | "finbert")         │
-│  processor_state: str  ("loaded" | "failed")         │
-│  model_id: str                                       │
-│  events_processed: int                               │
-│  errors: int                                         │
+│  serviceId: str    ("nexus-sentiment")               │
+│  version: str      (package version)                 │
+│  checks: {                                           │
+│    "processor:inference": {status, observedValue}    │
+│    "redis:publisher":     {status, observedValue}    │
+│    "timescale:writer":    {status}   (if configured) │
+│  }                                                   │
 └──────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────┐
@@ -173,18 +175,40 @@ Reused as-is from `nexus-common`. Alert types emitted by `nexus-sentiment`:
 - `PERSISTENCE_ERROR` — TimescaleDB batch write failure
 - `DEAD_LETTER_CLAIMED` — pending message exceeded claim threshold
 
-### SentimentHealth (Response Model) — NEW in `nexus-sentiment`
+### Health response body — NEW in `nexus-sentiment`
 
-Runtime status exposed via `GET /health`. In-memory only, not persisted.
+Runtime status exposed via `GET /health`, shaped per RFC
+[draft-inadarei-api-health-check](https://inadarei.github.io/rfc-healthcheck/).
+Built as a plain dict per request from in-memory state (not a pydantic model,
+not persisted). See `docs/design/nexus-trading-platform-design.md § Monitoring`
+for the platform-wide convention.
+
+**Top-level fields**:
 
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
-| `status` | `str` | Service health | `"ok"`, `"degraded"`, or `"error"` |
-| `processor_type` | `str` | Configured NLP processor | `"vader"` or `"finbert"` |
-| `processor_state` | `str` | Processor lifecycle state | `"loaded"` or `"failed"` |
-| `model_id` | `str` | Loaded model identifier | Non-empty when loaded |
-| `events_processed` | `int` | Total events published | >= 0 |
-| `errors` | `int` | Total inference/publish errors | >= 0 |
+| `status` | `str` | Service health (worst of component checks) | `"ok"`, `"degraded"`, `"error"` |
+| `serviceId` | `str` | Service identifier | `"nexus-sentiment"` |
+| `version` | `str` | Package version | Semver or `"unknown"` |
+| `checks` | `dict` | Per-component status keyed by `componentName:measurementName` | See below |
+
+**Component checks**:
+
+| Key | Status triggers | `observedValue` |
+|-----|-----------------|-----------------|
+| `processor:inference` | `error` when `consecutive_inference_errors >= 5`; `ok` otherwise | consecutive error count, or model_id when `ok` |
+| `redis:publisher` | `degraded` when publisher disconnected (buffering); `ok` otherwise | buffer size (int) |
+| `timescale:writer` | `ok` (present only when writer is configured) | — |
+
+Each check is a dict with `status` (required) plus optional `observedValue`,
+`observedUnit`, `output` (free-text explanation) per the RFC.
+
+**HTTP status code**: `503` when top-level `status == "error"`, `200` otherwise.
+**Media type**: `application/health+json`.
+
+**Anti-pattern avoided**: no lifetime error counters in the health body — the
+processor check uses a rolling consecutive-failure counter that self-heals on
+the next successful inference.
 
 ### BaseSentimentProcessor (ABC) — NEW in `nexus-sentiment`
 

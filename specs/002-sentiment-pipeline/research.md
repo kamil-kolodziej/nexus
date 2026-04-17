@@ -164,24 +164,29 @@ CREATE INDEX IF NOT EXISTS idx_sentiment_scores_asset
 
 ## 10. Health Endpoint Design (FR-010)
 
-**Decision**: FastAPI app with single `GET /health` returning JSON with processor status, model ID, events processed, and error count. Same `HealthEndpoint` wrapper pattern as `nexus-ingestion`. Response time target: <200ms.
+**Decision**: FastAPI app with single `GET /health` returning `application/health+json` per RFC [draft-inadarei-api-health-check](https://inadarei.github.io/rfc-healthcheck/). Same `HealthEndpoint` wrapper pattern as `nexus-ingestion`. Response time target: <200ms. Follows the platform-wide convention in `docs/design/nexus-trading-platform-design.md § Monitoring`.
 
-**Rationale**: Health probes need one endpoint. FastAPI is already used in `nexus-ingestion` and is a required dependency. The endpoint reads in-memory counters only — no I/O, so <200ms is trivially achieved.
+**Rationale**: A 3-state vocabulary (`ok` / `degraded` / `error`) mapped to HTTP 200/200/503 gives k8s probes and load balancers a clean routing signal while keeping `degraded` distinct so oncall can be alerted without traffic being drained. The RFC `checks{}` structure lets Grafana and uptime monitors render per-component state generically across services.
 
 Response format:
 ```json
 {
-  "status": "ok",
-  "processor": {
-    "type": "vader",
-    "state": "loaded",
-    "model_id": "vader:3.3.2"
-  },
-  "events_processed": 1234,
-  "errors": 5
+  "status": "degraded",
+  "serviceId": "nexus-sentiment",
+  "version": "0.1.0",
+  "checks": {
+    "processor:inference": {"status": "ok", "observedValue": "vader:3.3.2"},
+    "redis:publisher":     {"status": "degraded", "output": "buffering, 3 queued", "observedValue": 3},
+    "timescale:writer":    {"status": "ok"}
+  }
 }
 ```
 
+Top-level `status` is the worst of all component check statuses. The endpoint reads in-memory counters only — no I/O, so <200ms is trivially achieved.
+
+**Anti-pattern avoided**: lifetime error counters (`errors > 10`) trip once and never recover. The `processor:inference` check uses a rolling `consecutive_inference_errors` counter that resets on the next successful inference.
+
 **Alternatives Considered**:
-- Prometheus metrics endpoint — adds dependency; health probe is sufficient for initial monitoring
+- Separate `/livez` + `/readyz` endpoints (k8s best practice at scale) — overkill for single-host Docker Compose deployment; can be added later without breaking the `/health` contract
+- Prometheus `/metrics` endpoint — planned separately per the design doc's Monitoring section; not a replacement for `/health`
 - gRPC health check — not needed; HTTP is standard for Docker/Kubernetes health probes

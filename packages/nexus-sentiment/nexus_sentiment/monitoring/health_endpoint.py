@@ -1,4 +1,8 @@
-"""FastAPI health endpoint for the sentiment service."""
+"""FastAPI health endpoint for the sentiment service.
+
+Implements the RFC draft-inadarei-api-health-check response format.
+See docs/design/nexus-trading-platform-design.md § Monitoring.
+"""
 
 from __future__ import annotations
 
@@ -8,20 +12,15 @@ from typing import Any
 import structlog
 import uvicorn
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
 logger = structlog.get_logger()
 
+HEALTH_MEDIA_TYPE = "application/health+json"
 
-class SentimentHealth(BaseModel):
-    """Runtime status of the sentiment service."""
 
-    status: str  # "ok", "degraded", "error"
-    processor_type: str
-    processor_state: str  # "loaded", "failed"
-    model_id: str
-    events_processed: int
-    errors: int
+def _status_code(status: str) -> int:
+    return 503 if status == "error" else 200
 
 
 def create_health_app() -> FastAPI:
@@ -29,18 +28,20 @@ def create_health_app() -> FastAPI:
     app = FastAPI(title="Nexus Sentiment Health", docs_url=None, redoc_url=None)
 
     @app.get("/health")
-    async def health() -> dict[str, Any]:
+    async def health() -> JSONResponse:
         if hasattr(app.state, "health_provider"):
-            result: SentimentHealth = app.state.health_provider()
-            return result.model_dump(mode="json")
-        return SentimentHealth(
-            status="ok",
-            processor_type="unknown",
-            processor_state="unknown",
-            model_id="",
-            events_processed=0,
-            errors=0,
-        ).model_dump(mode="json")
+            body: dict[str, Any] = app.state.health_provider()
+        else:
+            body = {
+                "status": "ok",
+                "serviceId": "nexus-sentiment",
+                "checks": {},
+            }
+        return JSONResponse(
+            content=body,
+            status_code=_status_code(body.get("status", "ok")),
+            media_type=HEALTH_MEDIA_TYPE,
+        )
 
     return app
 
@@ -60,7 +61,7 @@ class HealthEndpoint:
         return self._app
 
     def set_health_provider(self, provider: Any) -> None:
-        """Set the callable that returns SentimentHealth."""
+        """Set the callable that returns the RFC-shaped health body as a dict."""
         self._app.state.health_provider = provider
 
     async def start(self) -> None:
