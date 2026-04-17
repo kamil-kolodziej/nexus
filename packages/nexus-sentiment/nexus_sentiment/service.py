@@ -156,7 +156,7 @@ class SentimentService:
             event = MarketEvent.from_redis_fields(fields)
         except Exception:
             logger.warning("malformed_market_event", message_id=message_id, exc_info=True)
-            await self._redis.xack(
+            await self._redis.xack(  # type: ignore[no-untyped-call]
                 self._config.input_stream, self._config.consumer_group, message_id
             )
             return
@@ -172,7 +172,7 @@ class SentimentService:
                 message_id=message_id,
                 exc_info=True,
             )
-            await self._redis.xack(
+            await self._redis.xack(  # type: ignore[no-untyped-call]
                 self._config.input_stream, self._config.consumer_group, message_id
             )
             return
@@ -214,7 +214,9 @@ class SentimentService:
                 return
 
         # Build effective asset list
-        effective_assets = self._build_effective_assets(article, combined_text)
+        effective_assets: list[str | None] = list(
+            self._build_effective_assets(article, combined_text)
+        )
 
         # Fan-out: one SentimentScore per asset (or asset=None for general market)
         if not effective_assets:
@@ -251,7 +253,7 @@ class SentimentService:
 
         # FR-006: XACK only after all publishes succeed
         if all_published:
-            await self._redis.xack(
+            await self._redis.xack(  # type: ignore[no-untyped-call]
                 self._config.input_stream, self._config.consumer_group, message_id
             )
             self._events_processed += 1
@@ -304,7 +306,7 @@ class SentimentService:
             try:
                 await asyncio.sleep(self._config.claim_sweep_interval)
                 if not self._running:
-                    break
+                    break  # type: ignore[unreachable]
 
                 min_idle_time = self._config.pending_claim_threshold * 1000  # ms
 
@@ -326,7 +328,7 @@ class SentimentService:
                             Severity.MEDIUM,
                             f"Claimed stale pending message: {msg_id}",
                         )
-                        await self._redis.xack(
+                        await self._redis.xack(  # type: ignore[no-untyped-call]
                             self._config.input_stream,
                             self._config.consumer_group,
                             msg_id,

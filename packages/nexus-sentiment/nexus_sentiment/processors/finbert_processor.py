@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from nexus_sentiment.processors.base import BaseSentimentProcessor, SentimentResult
 
 try:
@@ -22,7 +24,7 @@ class FinBertProcessor(BaseSentimentProcessor):
                 "Install with: pip install nexus-sentiment[finbert]"
             )
             raise ImportError(msg)
-        self._pipeline = None
+        self._pipeline: Any = None
 
     async def load(self) -> None:
         """Load FinBERT model via transformers pipeline."""

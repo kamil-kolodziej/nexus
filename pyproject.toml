@@ -38,6 +38,7 @@ warn_unreachable = true
 warn_unused_ignores = true
 show_error_codes = true
 explicit_package_bases = true
+mypy_path = "packages/nexus-common:packages/nexus-ingestion:packages/nexus-sentiment"
 # pydantic plugin for model-aware type checking
 plugins = ["pydantic.mypy"]
 

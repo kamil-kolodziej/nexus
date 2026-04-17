@@ -31,7 +31,8 @@ def create_health_app() -> FastAPI:
     @app.get("/health")
     async def health() -> dict[str, Any]:
         if hasattr(app.state, "health_provider"):
-            return app.state.health_provider().model_dump(mode="json")
+            result: SentimentHealth = app.state.health_provider()
+            return result.model_dump(mode="json")
         return SentimentHealth(
             status="ok",
             processor_type="unknown",

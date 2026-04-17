@@ -13,6 +13,7 @@ from nexus_common.redis_client import create_redis_client
 from nexus_sentiment.config import SentimentConfig
 from nexus_sentiment.monitoring.health_endpoint import HealthEndpoint
 from nexus_sentiment.persistence.timescale_writer import TimescaleWriter
+from nexus_sentiment.processors.base import BaseSentimentProcessor
 from nexus_sentiment.publishers.health_publisher import HealthPublisher
 from nexus_sentiment.publishers.redis_publisher import RedisPublisher
 from nexus_sentiment.service import SentimentService
@@ -26,7 +27,7 @@ def _request_shutdown(stop_event: asyncio.Event) -> None:
     stop_event.set()
 
 
-def _create_processor(processor_type: str):
+def _create_processor(processor_type: str) -> BaseSentimentProcessor:
     """Factory: create processor based on config."""
     if processor_type == "vader":
         from nexus_sentiment.processors.vader_processor import VaderProcessor
