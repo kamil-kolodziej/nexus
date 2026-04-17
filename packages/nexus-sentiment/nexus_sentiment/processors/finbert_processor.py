@@ -34,7 +34,6 @@ class FinBertProcessor(BaseSentimentProcessor):
             "text-classification",
             model="ProsusAI/finbert",
             top_k=3,
-            truncation=True,
         )
 
     def analyze(self, text: str) -> SentimentResult:
@@ -43,7 +42,9 @@ class FinBertProcessor(BaseSentimentProcessor):
             msg = "FinBertProcessor not loaded — call load() first"
             raise RuntimeError(msg)
 
-        results = self._pipeline(text)
+        # truncation must be passed at call time — the pipeline constructor
+        # silently drops it (transformers issue #25994).
+        results = self._pipeline(text, truncation=True)
         if isinstance(results, list) and results and isinstance(results[0], list):
             results = results[0]
 
@@ -55,10 +56,12 @@ class FinBertProcessor(BaseSentimentProcessor):
         neg = probs.get("negative", 0.0)
         neutral = probs.get("neutral", 0.0)
 
-        # Label via softmax argmax over all three classes
-        if pos >= neg and pos >= neutral:
+        # Label via softmax argmax over all three classes. Strict `>` so ties
+        # fall through to "neutral" — avoids emitting a directional signal when
+        # the model is genuinely undecided (matches CHK044 in spec).
+        if pos > neg and pos > neutral:
             label = "positive"
-        elif neg >= pos and neg >= neutral:
+        elif neg > pos and neg > neutral:
             label = "negative"
         else:
             label = "neutral"

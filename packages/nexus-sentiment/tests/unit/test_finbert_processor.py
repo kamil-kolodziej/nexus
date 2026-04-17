@@ -49,7 +49,11 @@ class TestFinBertAnalyze:
         return proc
 
     def _stub(self, processor, pos, neg, neutral):
-        def fake_pipeline(_text):
+        captured = {}
+
+        def fake_pipeline(text, **kwargs):
+            captured["text"] = text
+            captured["kwargs"] = kwargs
             return [
                 {"label": "positive", "score": pos},
                 {"label": "negative", "score": neg},
@@ -57,6 +61,7 @@ class TestFinBertAnalyze:
             ]
 
         processor._pipeline = fake_pipeline
+        processor._captured = captured
 
     def test_positive_argmax(self, processor):
         self._stub(processor, pos=0.7, neg=0.2, neutral=0.1)
@@ -92,6 +97,27 @@ class TestFinBertAnalyze:
         self._stub(processor, pos=0.40, neg=0.35, neutral=0.45)
         result = processor.analyze("Mixed signals from the latest report")
         assert result.label == "neutral"
+
+    def test_pos_neg_tie_resolves_to_neutral(self, processor):
+        # pos == neg with both above neutral: model is split between positive
+        # and negative — honest answer is "neutral", not an arbitrary pick.
+        self._stub(processor, pos=0.40, neg=0.40, neutral=0.20)
+        result = processor.analyze("Report is mixed")
+        assert result.label == "neutral"
+
+    def test_perfect_three_way_tie_resolves_to_neutral(self, processor):
+        # CHK044 edge case.
+        self._stub(processor, pos=1 / 3, neg=1 / 3, neutral=1 / 3)
+        result = processor.analyze("Ambiguous")
+        assert result.label == "neutral"
+
+    def test_truncation_passed_at_call_time(self, processor):
+        # Regression guard: transformers issue #25994 — `truncation=True` at
+        # pipeline construction is silently dropped, so it must be passed on
+        # every call. Without this, FinBERT raises on inputs > 512 tokens.
+        self._stub(processor, pos=0.5, neg=0.3, neutral=0.2)
+        processor.analyze("some long article text")
+        assert processor._captured["kwargs"].get("truncation") is True
 
     def test_raises_if_not_loaded(self, processor):
         processor._pipeline = None
