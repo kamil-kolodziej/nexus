@@ -19,7 +19,7 @@
 
 **Rationale**: FinBERT is specifically fine-tuned on financial text (Reuters TRC2 + Financial PhraseBank). It outputs softmax probabilities over `[positive, negative, neutral]`. Score mapping per spec: `score = probs[positive] - probs[negative]` (range [-1.0, +1.0]). `confidence = max(probs)` (range [0.0, 1.0]). Model weights ~440MB, downloaded and cached on first run via Hugging Face hub. Inference ~50-200ms per text on CPU. `model_id` format: `"finbert:{transformers.__version__}"`.
 
-Text truncation: FinBERT has a 512-token context window. Combined text (`headline + ". " + body_summary`) is truncated at tokenization via `truncation=True`. The `body_summary` field is already capped at 1000 chars (NewsArticle model constraint), so most inputs fit within limits.
+Text truncation: FinBERT has a 512-token context window. Combined text (`headline + ". " + body_summary`) is truncated at tokenization via `truncation=True`, **passed at `__call__` time** (`self._pipeline(text, truncation=True)`) rather than at pipeline construction — constructor-time `truncation=True` is silently dropped by the transformers text-classification pipeline (HF issue [#25994](https://github.com/huggingface/transformers/issues/25994)). The `body_summary` field is already capped at 1000 chars (NewsArticle model constraint), so most inputs fit within limits.
 
 **Alternatives Considered**:
 - DistilBERT-base with fine-tuning — requires collecting training data and training; FinBERT is pre-trained on financial text

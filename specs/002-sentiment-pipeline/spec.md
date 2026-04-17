@@ -223,7 +223,7 @@ As a platform operator, I want to choose between a lightweight rule-based model 
 - The `nexus-ingestion` service (001-data-ingestion) is deployed and producing `NewsArticle` events to `nexus:news-events` before this service starts consuming. The service handles an empty stream gracefully (blocks on `XREADGROUP`).
 - The `vaderSentiment` library is a required dependency. The `transformers` and `torch` libraries for FinBERT are optional install extras (`pip install nexus-sentiment[finbert]`).
 - VADER score mapping: compound score ≥ 0.05 → positive; ≤ -0.05 → negative; else neutral. `score = compound`.
-- FinBERT score mapping: softmax over `[negative, neutral, positive]`; `score = probs[positive] - probs[negative]`; `confidence = max(probs)`.
+- FinBERT score mapping: softmax over `[negative, neutral, positive]`; `score = probs[positive] - probs[negative]`; `confidence = max(probs)`; `sentiment_label` = softmax argmax with strict `>` — `positive` iff `probs[positive] > probs[negative]` *and* `probs[positive] > probs[neutral]`, `negative` under the symmetric condition, otherwise `neutral`. Ties fall through to `neutral` to avoid emitting a directional signal when the model is genuinely undecided.
 - The `sector:` prefix convention for tagging asset groups is established by extraction logic in `nexus-sentiment`, not ingestion.
 - Redis Streams consumer group semantics provide at-least-once delivery. Downstream consumers of `nexus:sentiment-events` must handle potential duplicate scores (same article processed twice after crash recovery).
 - TimescaleDB schema for `SentimentScore` events will be added to `docker/timescaledb/init.sql`.

@@ -100,8 +100,8 @@
 ### Implementation for User Story 3
 
 - [X] T022 [P] [US3] Create data/asset_dictionary.yaml with version field, initial assets (BTC/USDT with aliases [Bitcoin, BTC, bitcoin], ETH/USDT with aliases [Ethereum, ETH, Ether]), and sectors (sector:crypto with keywords [crypto market, cryptocurrency market, crypto], sector:stocks with keywords [stock market, equities market, stocks]) per research.md §5
-- [X] T023 [US3] Implement AssetExtractor: load YAML dictionary at init, compile case-insensitive \b{alias}\b regex per alias/keyword, extract(text, related_assets) → deduplicated effective asset list filtered against active_assets set, enforce max_fan_out cap (drop excess by insertion order, log warning), raise on missing/malformed dictionary in packages/nexus-sentiment/nexus_sentiment/extraction/asset_extractor.py
-- [X] T024 [US3] Integrate AssetExtractor into SentimentService: run extraction on combined text before fan-out, merge with related_assets, pass effective asset list to fan-out loop; add dictionary path and active_assets from config; exit at startup if dictionary missing/malformed (FR-017) in packages/nexus-sentiment/nexus_sentiment/service.py
+- [X] T023 [US3] Implement AssetExtractor: load YAML dictionary at init, compile case-insensitive \b{alias}\b regex per alias/keyword, extract(text) → deduplicated list of matched canonical IDs filtered against the `active_assets` set passed to `__init__` (empty set = no filter), raise on missing/malformed dictionary in packages/nexus-sentiment/nexus_sentiment/extraction/asset_extractor.py
+- [X] T024 [US3] Integrate AssetExtractor into SentimentService: `_build_effective_assets` filters `article.related_assets` against `active_assets`, merges with extractor output (which is already filtered), deduplicates preserving order, and caps at `max_fan_out` (log warning on overflow); exit at startup if dictionary missing/malformed (FR-017) in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: US1+US2+US3 complete — asset extraction fills gaps when upstream does not tag articles
 
@@ -183,7 +183,7 @@
 
 ### Implementation for User Story 7
 
-- [X] T036 [US7] Implement FinBertProcessor: load ProsusAI/finbert via transformers.pipeline("text-classification", top_k=3), map softmax probs → score (positive−negative), confidence (max prob), label; ImportError on missing transformers/torch with clear message; model_id returns "finbert:{version}" per research.md §2 in packages/nexus-sentiment/nexus_sentiment/processors/finbert_processor.py
+- [X] T036 [US7] Implement FinBertProcessor: load ProsusAI/finbert via transformers.pipeline("text-classification", top_k=3), call pipeline with `truncation=True` at call time (HF issue #25994 — init-time truncation is silently dropped), map softmax probs → score (positive−negative), confidence (max prob), label via strict-`>` argmax with ties falling to `neutral`; ImportError on missing transformers/torch with clear message; model_id returns "finbert:{version}" per research.md §2 in packages/nexus-sentiment/nexus_sentiment/processors/finbert_processor.py
 - [X] T037 [US7] Add processor factory to SentimentService or main.py: select VaderProcessor or FinBertProcessor based on config.processor_type; raise clear error with exit(1) for unknown processor_type or missing FinBERT dependencies (SRC-005) in packages/nexus-sentiment/nexus_sentiment/service.py
 
 **Checkpoint**: All 7 user stories complete — full sentiment pipeline operational
