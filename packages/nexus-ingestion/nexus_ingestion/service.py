@@ -85,12 +85,74 @@ class IngestionService:
     def set_health_endpoint(self, endpoint: HealthEndpoint) -> None:
         """Wire the health endpoint."""
         self._health_endpoint = endpoint
-        endpoint.set_adapter_healths_provider(lambda: self.adapter_healths)
+        endpoint.set_health_provider(self._get_health)
 
     @property
     def adapter_healths(self) -> list[AdapterHealth]:
         """Current health for all registered adapters."""
         return [adapter.health for adapter in self._adapters.values()]
+
+    def _get_health(self) -> dict[str, Any]:
+        """Return RFC-shaped health body. See docs/design § Monitoring."""
+        from importlib.metadata import PackageNotFoundError, version
+
+        checks: dict[str, dict[str, Any]] = {}
+
+        # adapter:connections — degraded if some unhealthy, error if all down.
+        adapter_healths = self.adapter_healths
+        total = len(adapter_healths)
+        connected = sum(1 for h in adapter_healths if h.status.value == "CONNECTED")
+
+        if total == 0:
+            checks["adapter:connections"] = {"status": "ok", "observedValue": 0}
+        elif connected == 0:
+            checks["adapter:connections"] = {
+                "status": "error",
+                "output": "all adapters disconnected",
+                "observedValue": total,
+            }
+        elif connected < total:
+            checks["adapter:connections"] = {
+                "status": "degraded",
+                "output": f"{total - connected} of {total} adapters unhealthy",
+                "observedValue": total,
+            }
+        else:
+            checks["adapter:connections"] = {"status": "ok", "observedValue": total}
+
+        # Redis publisher: degraded when disconnected (buffering).
+        if self._market_publisher:
+            connected_redis = getattr(self._market_publisher, "_connected", True)
+            buffer_size = getattr(self._market_publisher, "buffer_size", 0)
+            if not connected_redis:
+                checks["redis:publisher"] = {
+                    "status": "degraded",
+                    "output": f"disconnected, buffering {buffer_size} events",
+                    "observedValue": buffer_size,
+                }
+            else:
+                checks["redis:publisher"] = {"status": "ok", "observedValue": buffer_size}
+
+        # TimescaleDB writer (optional).
+        if self._timescale_writer is not None:
+            checks["timescale:writer"] = {"status": "ok"}
+
+        # Top-level status = worst of components.
+        severities = {"ok": 0, "degraded": 1, "error": 2}
+        worst = max((severities[c["status"]] for c in checks.values()), default=0)
+        status = ("ok", "degraded", "error")[worst]
+
+        try:
+            pkg_version = version("nexus-ingestion")
+        except PackageNotFoundError:
+            pkg_version = "unknown"
+
+        return {
+            "status": status,
+            "serviceId": "nexus-ingestion",
+            "version": pkg_version,
+            "checks": checks,
+        }
 
     async def handle_event(self, event: MarketEvent) -> None:
         """Route an event to all consumers: publisher, writer, gap detector."""
