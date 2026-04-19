@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    pass
-
 
 class TestSentimentConfig:
     """Tests for SentimentConfig TOML loading and env var precedence."""

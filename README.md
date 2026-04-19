@@ -18,7 +18,8 @@ Event-driven microservices, all Python, deployed via Docker Compose.
 
 ```
 Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per strategy)
-                                                          ↓ Signal
+                       │                                  ↓ Signal
+                       └─→ nexus-sentiment ──→ Redis Streams ─┘
                                                nexus-aggregator (signal aggregation)
                                                           ↓ TradeIntent
                                                   nexus-risk (5-layer validation)
@@ -36,6 +37,7 @@ Exchanges/APIs → nexus-ingestion → Redis Streams → nexus-strategies (per s
 |---|---|
 | `nexus-common` | Shared types: `MarketEvent`, `Signal`, `TradeIntent`, serialization |
 | `nexus-ingestion` | Data source adapters: exchanges (ccxt.pro WebSocket) and news (RSS). Publishes `MarketEvent` and `NewsArticle` events to Redis Streams |
+| `nexus-sentiment` | NLP pipeline that consumes `NewsArticle` events, scores them with VADER or FinBERT, fans out one `SentimentScore` per asset/sector |
 | `nexus-strategies` | Strategy interface, built-in strategies, Strategy Manager with hot-reload |
 | `nexus-aggregator` | Signal aggregation service, emits `TradeIntent` |
 | `nexus-risk` | 5-layer risk validation, progressive state machine |
@@ -87,7 +89,12 @@ Modes: historical replay, walk-forward analysis, strategy comparison.
 
 **Install:**
 ```bash
-pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev]
+pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev] -e packages/nexus-sentiment[dev]
+```
+
+For the FinBERT processor (optional, ~440 MB model download on first run):
+```bash
+pip install -e packages/nexus-sentiment[finbert]
 ```
 
 **Set up pre-commit hooks (run once after cloning):**
@@ -127,6 +134,12 @@ docker compose -f docker-compose.dev.yml up -d
 python -m nexus_ingestion.main  # export .env vars in your shell first
 ```
 
+**Run the sentiment service locally:**
+```bash
+docker compose -f docker-compose.dev.yml up -d   # needs Redis + TimescaleDB
+python -m nexus_sentiment.main                    # consumes nexus:news-events, publishes nexus:sentiment-events
+```
+
 `.env` is only loaded automatically by `docker compose`. When running the service directly,
 export the variables in your shell first (e.g. via a zsh dotenv plugin or
 `export $(grep -v '^#' .env | xargs)`).
@@ -135,4 +148,4 @@ Set `NEXUS_LOG_ENV=development` for human-readable log output (default is JSON).
 
 ## Status
 
-Active development. `nexus-common` and `nexus-ingestion` are implemented. Remaining services are in design/planning.
+Active development. `nexus-common`, `nexus-ingestion`, and `nexus-sentiment` are implemented. Remaining services are in design/planning.
