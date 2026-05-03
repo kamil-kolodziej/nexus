@@ -52,7 +52,12 @@ All defined in `nexus-common` and shared across packages:
 
 **Install (from repo root):**
 ```bash
-pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev]
+pip install -e packages/nexus-common[dev] -e packages/nexus-ingestion[dev] -e packages/nexus-sentiment[dev]
+```
+
+For the FinBERT processor (optional, ~440 MB model download on first run):
+```bash
+pip install -e packages/nexus-sentiment[finbert]
 ```
 
 **Set up pre-commit hooks (once after cloning):**
@@ -101,6 +106,21 @@ pytest packages/nexus-ingestion/tests/contract --snapshot-update
 ```bash
 cp config.example.toml config.toml  # edit as needed
 NEXUS_EXCHANGE_API_KEY=... NEXUS_EXCHANGE_API_SECRET=... python -m nexus_ingestion.main
+```
+
+**Run the sentiment service locally:**
+```bash
+docker compose -f docker-compose.dev.yml up -d   # needs Redis + TimescaleDB
+python -m nexus_sentiment.main                    # consumes nexus:news-events, publishes nexus:sentiment-events
+```
+
+**Run the full stack (all services in containers):**
+```bash
+cp .env.example .env                # add credentials for live trading (sandbox works without)
+cp config.example.toml config.toml  # edit news sources, assets, etc.
+docker compose up --build
+curl http://localhost:8080/health   # ingestion
+curl http://localhost:8081/health   # sentiment
 ```
 
 ## Spec Maintenance (speckit)
