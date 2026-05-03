@@ -61,6 +61,16 @@ class AssetExtractor:
                     pattern = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
                     self._patterns.append((sector_tag, pattern))
 
+        # Compile company alias patterns (canonical IDs like "company:COIN")
+        companies = data.get("companies", {})
+        if isinstance(companies, dict):
+            for canonical_id, info in companies.items():
+                if not isinstance(info, dict):
+                    continue
+                for alias in info.get("aliases", []):
+                    pattern = re.compile(rf"\b{re.escape(alias)}\b", re.IGNORECASE)
+                    self._patterns.append((canonical_id, pattern))
+
         logger.info(
             "asset_dictionary_loaded",
             path=dictionary_path,

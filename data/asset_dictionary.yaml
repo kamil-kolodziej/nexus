@@ -19,11 +19,39 @@ assets:
 sectors:
   "sector:crypto":
     keywords:
-      - crypto market
-      - cryptocurrency market
       - crypto
+      - crypto market
+      - cryptocurrency
+      - cryptocurrency market
+      - defi
+      - nft
+      - nfts
+      - memecoin
+      - meme coin
+      - stablecoin
+      - stablecoins
+      - dex
+      - dapp
+      - blockchain
+      - on-chain
+      - onchain
+      - web3
+      - bitcoin
+      - ethereum
+      - altcoin
   "sector:stocks":
     keywords:
       - stock market
       - equities market
       - stocks
+      - equity
+      - equities
+      - shares
+      - public listing
+      - ipo
+
+companies:
+  "company:COIN":
+    aliases:
+      - Coinbase
+      - COIN
