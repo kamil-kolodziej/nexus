@@ -74,7 +74,16 @@ class HealthEndpoint:
         )
         self._server = uvicorn.Server(config)
         self._task = asyncio.create_task(self._server.serve(), name="health-endpoint")
+        self._task.add_done_callback(self._on_task_done)
         logger.info("health_endpoint_started", port=self._port)
+
+    def _on_task_done(self, task: asyncio.Task[None]) -> None:
+        """FR-009 supervision: log if the health endpoint task crashes."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("health_endpoint_task_crashed", error=str(exc), exc_info=exc)
 
     async def stop(self) -> None:
         """Shutdown the server."""

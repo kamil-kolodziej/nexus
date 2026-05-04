@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from nexus_common.schemas.enums import EventType, Severity
 from nexus_common.schemas.health_alert import HealthAlert
-from nexus_common.schemas.market_event import MarketEvent, SentimentScore
+from nexus_common.schemas.market_event import MarketEvent, NewsArticle, SentimentScore
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -145,7 +145,13 @@ class SentimentService:
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.error("consumer_loop_error", exc_info=True)
+                logger.error(
+                    "consumer_loop_error",
+                    events_processed=self._events_processed,
+                    consecutive_inference_errors=self._consecutive_inference_errors,
+                    input_stream=self._config.input_stream,
+                    exc_info=True,
+                )
                 await asyncio.sleep(1)
 
     async def _process_message(self, message_id: str, fields: dict[str, str]) -> None:
@@ -162,8 +168,6 @@ class SentimentService:
 
         # Validate NewsArticle payload
         try:
-            from nexus_common.schemas.market_event import NewsArticle
-
             article = NewsArticle.model_validate(event.payload)
         except Exception:
             logger.warning(
