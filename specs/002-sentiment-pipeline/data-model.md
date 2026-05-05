@@ -100,6 +100,7 @@
 │  version: str                                        │
 │  assets: dict[canonical_id, {aliases: list[str]}]    │
 │  sectors: dict[sector_tag, {keywords: list[str]}]    │
+│  companies: dict[canonical_id, {aliases: list[str]}] │
 └──────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────┐
@@ -130,7 +131,7 @@ The output of NLP inference on a news article. Added to `nexus_common.schemas.ma
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
 | `article_url` | `str` | Source article URL (pass-through from NewsArticle) | Non-empty |
-| `asset` | `str \| None` | Trading pair (`"BTC/USDT"`), sector group (`"sector:crypto"`), or `None` (general market) | ccxt symbol, `sector:` prefix, or `None`; never empty string |
+| `asset` | `str \| None` | Trading pair (`"BTC/USDT"`), sector group (`"sector:crypto"`), company (`"company:COIN"`), or `None` (general market) | ccxt symbol, `sector:` prefix, `company:` prefix, or `None`; never empty string |
 | `score` | `float` | Sentiment polarity | Range [-1.0, +1.0] inclusive |
 | `confidence` | `float` | Model certainty | Range [0.0, 1.0] inclusive |
 | `sentiment_label` | `str` | Classification label | One of: `"positive"`, `"negative"`, `"neutral"` |
@@ -171,7 +172,7 @@ When used for sentiment events:
 Reused as-is from `nexus-common`. Alert types emitted by `nexus-sentiment`:
 - `MODEL_INFERENCE_ERROR` — NLP inference failure on a single article
 - `MODEL_LOAD_FAILURE` — NLP model failed to load at startup (followed by service exit)
-- `REDIS_DISCONNECT` — lost connection to Redis
+- `REDIS_DISCONNECT` — lost connection to Redis (declared, but **not yet emitted** by `RedisPublisher`; see `contracts/sentiment-health-events.md` and `docs/plans/TODO.md`)
 - `PERSISTENCE_ERROR` — TimescaleDB batch write failure
 - `DEAD_LETTER_CLAIMED` — pending message exceeded claim threshold
 

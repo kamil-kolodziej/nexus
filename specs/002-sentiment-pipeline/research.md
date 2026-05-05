@@ -54,7 +54,7 @@ Dead-letter handling: After claiming a message that has exceeded `pending_claim_
 
 ## 5. Asset Extraction Dictionary Design (FR-017, FR-020)
 
-**Decision**: YAML file at `data/asset_dictionary.yaml` with three sections: `assets` (mapping canonical identifiers to aliases), `sectors` (mapping sector tags to keyword lists), and `regex_patterns` (optional strict word-boundary regex overrides). Loaded once at service startup. Filtered against active asset universe at extraction time.
+**Decision**: YAML file at `data/asset_dictionary.yaml` with three sections: `assets` (mapping canonical trading-pair identifiers to aliases), `sectors` (mapping sector tags to keyword lists, e.g. `sector:crypto`), and `companies` (mapping company canonical IDs like `company:COIN` to aliases). All three section types use the same alias/keyword regex pipeline with strict word boundaries. Loaded once at service startup. Filtered against the active asset universe at extraction time.
 
 **Rationale**: YAML is human-readable and version-controllable. Separating assets from sectors allows independent maintenance. Strict word-boundary matching (`\b`) prevents false positives (e.g., "BIT" matching "Bitcoin"). The dictionary is the single source of truth for what tokens can be extracted — nothing is inferred or fuzzy-matched (FR-020).
 
@@ -72,10 +72,15 @@ assets:
 
 sectors:
   "sector:crypto":
-    keywords: ["crypto market", "cryptocurrency market", "crypto"]
+    keywords: ["crypto", "crypto market", "defi", "nft", "stablecoin", "blockchain", "..."]
   "sector:stocks":
-    keywords: ["stock market", "equities market", "stocks"]
+    keywords: ["stocks", "equities", "ipo", "..."]
   # ... more sectors
+
+companies:
+  "company:COIN":
+    aliases: ["Coinbase", "COIN"]
+  # ... more companies
 ```
 
 Matching algorithm:

@@ -20,7 +20,7 @@ Each message is a flat key-value map (Redis Stream entry fields), following the 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `source` | string | ✓ | `"nexus-sentiment:{processor_type}"` (e.g., `"nexus-sentiment:vader"`, `"nexus-sentiment:finbert"`) |
-| `asset` | string | ✓ | ccxt unified symbol (e.g., `"BTC/USDT"`), sector group with `sector:` prefix (e.g., `"sector:crypto"`), or empty string (encodes `None` = general market) |
+| `asset` | string | ✓ | ccxt unified symbol (e.g., `"BTC/USDT"`), sector group with `sector:` prefix (e.g., `"sector:crypto"`), company with `company:` prefix (e.g., `"company:COIN"`), or empty string (encodes `None` = general market) |
 | `timestamp` | string | ✓ | ISO-8601 UTC (e.g., `"2026-04-02T14:30:00.123Z"`) |
 | `event_type` | string | ✓ | Always `"SENTIMENT_SCORE"` |
 | `schema_version` | string | ✓ | Semantic version (e.g., `"1.0.0"`) |
@@ -44,7 +44,7 @@ Each message is a flat key-value map (Redis Stream entry fields), following the 
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
 | `article_url` | string | ✓ | Non-empty | URL of the source news article (pass-through from NewsArticle) |
-| `asset` | string \| null | ✓ | ccxt symbol, `sector:` prefix, or null | The asset this score applies to. `null` for general market sentiment. |
+| `asset` | string \| null | ✓ | ccxt symbol, `sector:` prefix, `company:` prefix, or null | The asset this score applies to. `null` for general market sentiment. |
 | `score` | float | ✓ | [-1.0, +1.0] | Sentiment polarity. Positive = bullish, negative = bearish. |
 | `confidence` | float | ✓ | [0.0, 1.0] | Model certainty in the classification. |
 | `sentiment_label` | string | ✓ | `"positive"` \| `"negative"` \| `"neutral"` | Discrete classification. |
@@ -52,13 +52,14 @@ Each message is a flat key-value map (Redis Stream entry fields), following the 
 
 ### Asset Field Convention
 
-Consumers MUST distinguish between three asset field patterns:
+Consumers MUST distinguish between four asset field patterns:
 
 | Pattern | Example | Meaning |
 |---------|---------|---------|
 | ccxt symbol | `"BTC/USDT"` | Sentiment specific to a trading pair |
 | `sector:` prefix | `"sector:crypto"` | Sector-wide sentiment |
-| `null` (empty string in Redis) | `""` → deserialized as `None` | General market sentiment (no specific asset or sector) |
+| `company:` prefix | `"company:COIN"` | Company-specific sentiment (e.g., for trading the company's listed equity) |
+| `null` (empty string in Redis) | `""` → deserialized as `None` | General market sentiment (no specific asset, sector, or company) |
 
 ## Fan-out Semantics
 

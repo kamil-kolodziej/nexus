@@ -32,7 +32,7 @@ Uses the same `HealthAlert` model from `nexus-common` as `nexus-ingestion`:
 |------------|----------|---------|-------------|
 | `MODEL_INFERENCE_ERROR` | HIGH | NLP inference fails for a single article | Logged, counted; consumer loop continues. |
 | `MODEL_LOAD_FAILURE` | HIGH | NLP model fails to load at startup | Service exits immediately after emitting this alert. Non-recoverable. |
-| `REDIS_DISCONNECT` | HIGH | Lost connection to Redis | Published on reconnection (the alert itself requires connectivity). |
+| `REDIS_DISCONNECT` | HIGH | Lost connection to Redis | **Not yet emitted** — `RedisPublisher` detects disconnect (sets `_connected=False`) but does not produce a `HealthAlert`. Tracked in `docs/plans/TODO.md` (cross-package) alongside the buffer-flush/reconnect bug. Would publish on reconnection (the alert itself requires connectivity). |
 | `PERSISTENCE_ERROR` | MEDIUM | TimescaleDB batch write fails after retries | Events are still published to Redis; only persistence is affected. |
 | `DEAD_LETTER_CLAIMED` | MEDIUM | Pending message exceeded `pending_claim_threshold` | Message acknowledged and logged; was unprocessable. |
 
