@@ -71,18 +71,22 @@ class SentimentService:
             if "BUSYGROUP" not in str(e):
                 raise
 
-        self._running = True
-
-        # FR-009: independent tasks with add_done_callback, no TaskGroup
-        self._consumer_task = asyncio.create_task(self._consumer_loop(), name="sentiment-consumer")
-        self._consumer_task.add_done_callback(self._on_consumer_done)
-
+        # Bring up supporting components first — if any of these raise, no
+        # supervised tasks have been created yet, so the failure propagates
+        # cleanly without orphaning the consumer loop. Mirrors the ordering
+        # in nexus-ingestion's IngestionService.start().
         if self._health_endpoint:
             self._health_endpoint.set_health_provider(self._get_health)
             await self._health_endpoint.start()
 
         if self._timescale_writer:
             await self._timescale_writer.start()
+
+        self._running = True
+
+        # FR-009: independent tasks with add_done_callback, no TaskGroup
+        self._consumer_task = asyncio.create_task(self._consumer_loop(), name="sentiment-consumer")
+        self._consumer_task.add_done_callback(self._on_consumer_done)
 
         self._sweep_task = asyncio.create_task(
             self._claim_sweep_loop(), name="sentiment-claim-sweep"
