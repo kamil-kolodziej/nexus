@@ -87,6 +87,9 @@ jobs:
           cache: pip
       - name: Install packages and pip-audit
         run: |
+          # setup-python ships pip 26.0.1, which has CVE-2026-3219 and CVE-2026-6357.
+          # Both are fixed in pip 26.1.
+          python -m pip install --upgrade "pip>=26.1"
           pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
           pip install pip-audit
       - name: Audit dependencies
