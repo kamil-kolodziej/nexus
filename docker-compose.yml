@@ -53,10 +53,13 @@ services:
     build:
       context: .
       dockerfile: packages/nexus-sentiment/Dockerfile
+      args:
+        NEXUS_PROCESSOR_TYPE: ${NEXUS_PROCESSOR_TYPE:-vader}
     environment:
       NEXUS_REDIS_URL: redis://redis:6379
       NEXUS_TIMESCALEDB_DSN: postgresql://nexus:nexus_dev@timescaledb:5432/nexus  # pragma: allowlist secret
       NEXUS_CONFIG_FILE: /app/config.toml
+      NEXUS_PROCESSOR_TYPE: ${NEXUS_PROCESSOR_TYPE:-vader}
     volumes:
       - ./config.toml:/app/config.toml:ro
       - ./data:/app/data:ro
