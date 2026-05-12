@@ -42,7 +42,7 @@ class TestVaderProcessor:
     @given(text=st.text(min_size=1, max_size=500))
     @settings(max_examples=100)
     def test_label_threshold_correctness(self, text):
-        """VADER label thresholds: compound >= 0.05 -> positive, <= -0.05 -> negative, else neutral."""
+        """VADER thresholds: compound >= 0.05 -> positive, <= -0.05 -> negative, else neutral."""
         proc = VaderProcessor()
         proc._load_sync()
         result = proc.analyze(text)
