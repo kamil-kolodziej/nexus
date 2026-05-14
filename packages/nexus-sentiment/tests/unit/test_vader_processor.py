@@ -69,3 +69,8 @@ class TestVaderProcessor:
 
     async def test_model_id_format(self, processor):
         assert "vader:" in processor.model_id
+
+    def test_analyze_before_load_raises(self):
+        proc = VaderProcessor()
+        with pytest.raises(RuntimeError, match="not loaded"):
+            proc.analyze("anything")

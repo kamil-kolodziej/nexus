@@ -362,3 +362,445 @@ class TestSentimentServiceTaskIndependence:
         assert health["serviceId"] == "nexus-sentiment"
         assert "processor:inference" in health["checks"]
         assert health["checks"]["processor:inference"]["status"] == "ok"
+
+
+def _make_service(
+    *,
+    timescale_writer=None,
+    health_endpoint=None,
+    asset_extractor=None,
+    score_label="positive",
+    score=0.5,
+    confidence=0.5,
+    config_overrides=None,
+):
+    """Build a SentimentService with stub collaborators wired for assertions."""
+    from nexus_sentiment.processors.base import SentimentResult
+
+    config = _make_config(**(config_overrides or {}))
+    redis = AsyncMock()
+    redis.xack = AsyncMock()
+    proc = MagicMock()
+    proc.analyze.return_value = SentimentResult(
+        label=score_label, score=score, confidence=confidence
+    )
+    proc.model_id = "vader:3.3.2"
+    proc.close = AsyncMock()
+    pub = AsyncMock()
+    pub.publish = AsyncMock(return_value="1-0")
+    pub.buffer_size = 0
+    pub._connected = True
+    health_pub = AsyncMock()
+    health_pub.publish = AsyncMock()
+
+    svc = SentimentService(
+        config=config,
+        redis=redis,
+        processor=proc,
+        redis_publisher=pub,
+        health_publisher=health_pub,
+        timescale_writer=timescale_writer,
+        health_endpoint=health_endpoint,
+        asset_extractor=asset_extractor,
+    )
+    svc._mock_redis = redis
+    svc._mock_pub = pub
+    svc._mock_health_pub = health_pub
+    svc._mock_proc = proc
+    return svc
+
+
+class TestSentimentServiceStartStop:
+    """Lifecycle: start brings up components in the right order, stop tears them down."""
+
+    async def test_start_creates_consumer_group_and_swallows_busygroup(self):
+        svc = _make_service()
+        svc._mock_redis.xgroup_create = AsyncMock(
+            side_effect=Exception("BUSYGROUP Consumer Group name already exists")
+        )
+
+        await svc.start()
+        try:
+            svc._mock_redis.xgroup_create.assert_awaited_once()
+            assert svc._running is True
+            assert svc._consumer_task is not None
+            assert svc._sweep_task is not None
+        finally:
+            await svc.stop()
+
+    async def test_start_reraises_other_xgroup_errors(self):
+        svc = _make_service()
+        svc._mock_redis.xgroup_create = AsyncMock(side_effect=ConnectionError("nope"))
+
+        with pytest.raises(ConnectionError):
+            await svc.start()
+        assert svc._running is False
+        assert svc._consumer_task is None
+
+    async def test_start_brings_up_health_endpoint_and_writer(self):
+        health_endpoint = MagicMock()
+        health_endpoint.set_health_provider = MagicMock()
+        health_endpoint.start = AsyncMock()
+        health_endpoint.stop = AsyncMock()
+
+        writer = MagicMock()
+        writer.start = AsyncMock()
+        writer.stop = AsyncMock()
+
+        svc = _make_service(timescale_writer=writer, health_endpoint=health_endpoint)
+        svc._mock_redis.xgroup_create = AsyncMock()
+
+        await svc.start()
+        try:
+            health_endpoint.set_health_provider.assert_called_once_with(svc._get_health)
+            health_endpoint.start.assert_awaited_once()
+            writer.start.assert_awaited_once()
+        finally:
+            await svc.stop()
+            health_endpoint.stop.assert_awaited_once()
+            writer.stop.assert_awaited_once()
+            svc._mock_proc.close.assert_awaited()
+
+    async def test_stop_cancels_tasks_and_closes_processor(self):
+        svc = _make_service()
+        svc._mock_redis.xgroup_create = AsyncMock()
+        svc._mock_redis.xreadgroup = AsyncMock(return_value=[])
+        svc._mock_redis.xautoclaim = AsyncMock(return_value=(b"0-0", [], []))
+
+        await svc.start()
+        consumer_task = svc._consumer_task
+        sweep_task = svc._sweep_task
+
+        await svc.stop()
+
+        assert svc._running is False
+        assert consumer_task.done()
+        assert sweep_task.done()
+        svc._mock_proc.close.assert_awaited()
+
+
+class TestSentimentServiceConsumerLoop:
+    """The XREADGROUP loop dispatches messages and survives transient errors."""
+
+    async def test_empty_messages_loops_until_running_false(self):
+        import asyncio
+
+        svc = _make_service()
+
+        async def xreadgroup_yield(*_a, **_kw):
+            await asyncio.sleep(0)
+            return []
+
+        svc._mock_redis.xreadgroup = AsyncMock(side_effect=xreadgroup_yield)
+
+        svc._running = True
+
+        async def stop_soon():
+            await asyncio.sleep(0.02)
+            svc._running = False
+
+        await asyncio.gather(svc._consumer_loop(), stop_soon())
+        assert svc._mock_redis.xreadgroup.await_count >= 1
+
+    async def test_dispatches_message_to_process_message(self, monkeypatch):
+        import asyncio
+
+        svc = _make_service()
+        fields = _make_news_event()
+        called: list = []
+        original = svc._process_message
+
+        async def spy(msg_id, fields):
+            called.append((msg_id, fields))
+            svc._running = False
+            await original(msg_id, fields)
+
+        monkeypatch.setattr(svc, "_process_message", spy)
+
+        svc._mock_redis.xreadgroup = AsyncMock(
+            return_value=[(b"nexus:news-events", [("msg-1", fields)])]
+        )
+
+        svc._running = True
+        await asyncio.wait_for(svc._consumer_loop(), timeout=1)
+
+        assert len(called) == 1
+        assert called[0][0] == "msg-1"
+
+    async def test_loop_recovers_from_unexpected_error(self):
+        import asyncio
+
+        svc = _make_service()
+        attempts = {"n": 0}
+
+        async def flaky(*_a, **_kw):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise RuntimeError("boom")
+            svc._running = False
+            return []
+
+        svc._mock_redis.xreadgroup = AsyncMock(side_effect=flaky)
+
+        original_sleep = asyncio.sleep
+        sleeps: list[float] = []
+
+        async def fake_sleep(n: float) -> None:
+            sleeps.append(n)
+            await original_sleep(0)
+
+        import nexus_sentiment.service as svc_module
+
+        svc_module.asyncio.sleep = fake_sleep
+        try:
+            svc._running = True
+            await asyncio.wait_for(svc._consumer_loop(), timeout=1)
+        finally:
+            svc_module.asyncio.sleep = original_sleep
+
+        assert attempts["n"] >= 2
+        assert 1 in sleeps  # error-path sleep is 1s
+
+    async def test_cancelled_exits_cleanly(self):
+        import asyncio
+
+        svc = _make_service()
+
+        async def slow_read(*_a, **_kw):
+            await asyncio.sleep(10)
+            return []
+
+        svc._mock_redis.xreadgroup = AsyncMock(side_effect=slow_read)
+        svc._running = True
+        task = asyncio.create_task(svc._consumer_loop())
+        await asyncio.sleep(0.01)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert task.cancelled() or task.done()
+
+
+class TestSentimentServicePartialPublishFailure:
+    """all_published=False path: no XACK, warning logged, counter unchanged."""
+
+    async def test_partial_publish_does_not_xack(self):
+        svc = _make_service()
+        # First publish ok, second returns None (buffered/dropped).
+        svc._mock_pub.publish = AsyncMock(side_effect=["1-0", None])
+
+        fields = _make_news_event(related_assets=["BTC/USDT", "ETH/USDT"])
+        await svc._process_message("msg-1", fields)
+
+        svc._mock_redis.xack.assert_not_awaited()
+        assert svc._events_processed == 0
+
+
+class TestSentimentServiceEmptyText:
+    """Whitespace-only article emits neutral 0.0/0.0 and still XACKs."""
+
+    async def test_empty_article_emits_neutral_zero(self):
+        svc = _make_service()
+        fields = _make_news_event(
+            headline="   ",
+            body_summary="",
+            related_assets=["BTC/USDT"],
+        )
+        await svc._process_message("msg-1", fields)
+
+        svc._mock_proc.analyze.assert_not_called()
+        svc._mock_pub.publish.assert_awaited_once()
+        published = svc._mock_pub.publish.await_args.args[0]
+        payload = json.loads(published["payload"])
+        assert payload["sentiment_label"] == "neutral"
+        assert payload["score"] == 0.0
+        assert payload["confidence"] == 0.0
+        svc._mock_redis.xack.assert_awaited_once()
+
+
+class TestSentimentServiceTimescaleEnqueue:
+    """When a TimescaleWriter is wired, every published event is enqueued."""
+
+    async def test_each_published_event_enqueued(self):
+        writer = MagicMock()
+        writer.enqueue = MagicMock(return_value=True)
+
+        svc = _make_service(timescale_writer=writer)
+        fields = _make_news_event(related_assets=["BTC/USDT", "ETH/USDT"])
+
+        await svc._process_message("msg-1", fields)
+
+        assert writer.enqueue.call_count == 2
+
+
+class TestSentimentServiceBuildEffectiveAssets:
+    """active_assets filter, dedupe, max_fan_out cap, AssetExtractor merge."""
+
+    async def test_related_assets_filtered_to_active(self):
+        svc = _make_service(config_overrides={"active_assets": ["BTC/USDT"]})
+        fields = _make_news_event(related_assets=["BTC/USDT", "DOGE/USDT"])
+
+        await svc._process_message("msg-1", fields)
+
+        assert svc._mock_pub.publish.await_count == 1
+        payload = json.loads(svc._mock_pub.publish.await_args.args[0]["payload"])
+        assert payload["asset"] == "BTC/USDT"
+
+    async def test_max_fan_out_caps_assets(self):
+        many = [f"A{i}/USDT" for i in range(20)]
+        svc = _make_service(
+            config_overrides={
+                "active_assets": many,
+                "max_fan_out": 5,
+            }
+        )
+        fields = _make_news_event(related_assets=many)
+
+        await svc._process_message("msg-1", fields)
+
+        assert svc._mock_pub.publish.await_count == 5
+
+    async def test_asset_extractor_results_merged(self):
+        extractor = MagicMock()
+        extractor.extract = MagicMock(return_value=["ETH/USDT"])
+
+        svc = _make_service(
+            config_overrides={"active_assets": ["BTC/USDT", "ETH/USDT"]},
+            asset_extractor=extractor,
+        )
+        fields = _make_news_event(related_assets=["BTC/USDT"])
+
+        await svc._process_message("msg-1", fields)
+
+        assert svc._mock_pub.publish.await_count == 2
+        published_assets = sorted(
+            json.loads(c.args[0]["payload"])["asset"] for c in svc._mock_pub.publish.await_args_list
+        )
+        assert published_assets == ["BTC/USDT", "ETH/USDT"]
+
+
+class TestSentimentServiceGetHealth:
+    """RFC-shaped health body reflects component states correctly."""
+
+    async def test_error_status_when_consecutive_inference_failures_high(self):
+        svc = _make_service()
+        svc._consecutive_inference_errors = 5
+
+        body = svc._get_health()
+        assert body["status"] == "error"
+        assert body["checks"]["processor:inference"]["status"] == "error"
+        assert body["checks"]["processor:inference"]["observedValue"] == 5
+
+    async def test_degraded_when_redis_publisher_disconnected(self):
+        svc = _make_service()
+        svc._redis_publisher._connected = False
+        svc._redis_publisher.buffer_size = 7
+
+        body = svc._get_health()
+        assert body["status"] == "degraded"
+        assert body["checks"]["redis:publisher"]["status"] == "degraded"
+        assert body["checks"]["redis:publisher"]["observedValue"] == 7
+
+    async def test_timescale_writer_check_present_when_writer_wired(self):
+        svc = _make_service(timescale_writer=MagicMock())
+        body = svc._get_health()
+        assert "timescale:writer" in body["checks"]
+        assert body["checks"]["timescale:writer"]["status"] == "ok"
+
+    async def test_version_falls_back_to_unknown(self, monkeypatch):
+        from importlib.metadata import PackageNotFoundError
+
+        def raise_missing(_name):
+            raise PackageNotFoundError
+
+        # Patch the global `version` import lookup used inside _get_health.
+        import importlib.metadata as md
+
+        monkeypatch.setattr(md, "version", raise_missing)
+
+        svc = _make_service()
+        body = svc._get_health()
+        assert body["version"] == "unknown"
+
+
+class TestSentimentServiceTaskCallbacks:
+    """_on_*_done branches: silent on cancellation, logs on exception."""
+
+    def test_consumer_done_callback_silent_on_cancel(self):
+        svc = _make_service()
+        task = MagicMock()
+        task.cancelled.return_value = True
+        # Must not raise.
+        svc._on_consumer_done(task)
+
+    def test_consumer_done_callback_logs_on_exception(self):
+        svc = _make_service()
+        task = MagicMock()
+        task.cancelled.return_value = False
+        task.exception.return_value = RuntimeError("boom")
+        svc._on_consumer_done(task)  # logs but does not raise
+
+    def test_sweep_done_callback_silent_on_cancel(self):
+        svc = _make_service()
+        task = MagicMock()
+        task.cancelled.return_value = True
+        svc._on_sweep_done(task)
+
+    def test_sweep_done_callback_logs_on_exception(self):
+        svc = _make_service()
+        task = MagicMock()
+        task.cancelled.return_value = False
+        task.exception.return_value = RuntimeError("boom")
+        svc._on_sweep_done(task)
+
+
+class TestSentimentServiceClaimSweep:
+    """The XAUTOCLAIM loop emits a health alert per claimed message and survives errors."""
+
+    async def test_no_claims_emits_no_alert(self):
+        import asyncio
+
+        svc = _make_service(config_overrides={"claim_sweep_interval": 0.01})
+        svc._mock_redis.xautoclaim = AsyncMock(return_value=(b"0-0", [], []))
+
+        svc._running = True
+        task = asyncio.create_task(svc._claim_sweep_loop())
+        await asyncio.sleep(0.05)
+        svc._running = False
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+        svc._mock_health_pub.publish.assert_not_awaited()
+        svc._mock_redis.xack.assert_not_awaited()
+
+    async def test_sweep_error_path_logged_and_sleeps(self):
+        import asyncio
+
+        svc = _make_service(config_overrides={"claim_sweep_interval": 0.01})
+        attempts = {"n": 0}
+
+        async def flaky(*_a, **_kw):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise RuntimeError("xautoclaim boom")
+            svc._running = False
+            return (b"0-0", [], [])
+
+        svc._mock_redis.xautoclaim = AsyncMock(side_effect=flaky)
+
+        original_sleep = asyncio.sleep
+        sleeps: list[float] = []
+
+        async def fake_sleep(n: float) -> None:
+            sleeps.append(n)
+            await original_sleep(0)
+
+        import nexus_sentiment.service as svc_module
+
+        svc_module.asyncio.sleep = fake_sleep
+        try:
+            svc._running = True
+            await asyncio.wait_for(svc._claim_sweep_loop(), timeout=1)
+        finally:
+            svc_module.asyncio.sleep = original_sleep
+
+        assert attempts["n"] >= 1
+        assert 5 in sleeps  # error-path sleep is 5s

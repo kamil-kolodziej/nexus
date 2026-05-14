@@ -75,3 +75,17 @@ url = "redis://custom:6380"
 
         config = SentimentConfig()
         assert config.redis_url == "redis://custom:6380"
+
+    def test_timescaledb_dsn_from_section(self, monkeypatch, tmp_path):
+        toml_content = """
+[timescaledb]
+dsn = "postgresql://tsdb:5432/nexus"
+"""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(toml_content)
+        monkeypatch.setenv("NEXUS_CONFIG_FILE", str(config_file))
+
+        from nexus_sentiment.config import SentimentConfig
+
+        config = SentimentConfig()
+        assert config.timescaledb_dsn == "postgresql://tsdb:5432/nexus"

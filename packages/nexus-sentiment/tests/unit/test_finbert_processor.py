@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 
@@ -123,3 +125,53 @@ class TestFinBertAnalyze:
         processor._pipeline = None
         with pytest.raises(RuntimeError, match="not loaded"):
             processor.analyze("anything")
+
+    def test_nested_list_result_is_unwrapped(self, processor):
+        """transformers pipelines with top_k may return a wrapped list."""
+        captured = {}
+
+        def fake_pipeline(text, **kwargs):
+            captured["text"] = text
+            return [
+                [
+                    {"label": "positive", "score": 0.7},
+                    {"label": "negative", "score": 0.2},
+                    {"label": "neutral", "score": 0.1},
+                ]
+            ]
+
+        processor._pipeline = fake_pipeline
+        result = processor.analyze("Earnings beat estimates")
+        assert result.label == "positive"
+        assert result.score == pytest.approx(0.5)
+
+    def test_empty_results_default_to_neutral(self, processor):
+        """If the pipeline returns nothing usable, label is neutral with zero confidence."""
+        processor._pipeline = lambda text, **kwargs: []
+        result = processor.analyze("anything")
+        assert result.label == "neutral"
+        assert result.score == 0.0
+        assert result.confidence == 0.0
+
+
+class TestFinBertGuards:
+    """ImportError guard and load()/close() lifecycle."""
+
+    def test_init_raises_when_transformers_missing(self, monkeypatch):
+        import nexus_sentiment.processors.finbert_processor as fb_mod
+
+        monkeypatch.setattr(fb_mod, "_HAS_TRANSFORMERS", False)
+        with pytest.raises(ImportError, match="transformers"):
+            fb_mod.FinBertProcessor()
+
+    async def test_close_releases_pipeline(self):
+        try:
+            import transformers  # noqa: F401
+        except ImportError:
+            pytest.skip("transformers not installed")
+        from nexus_sentiment.processors.finbert_processor import FinBertProcessor
+
+        proc = FinBertProcessor()
+        proc._pipeline = MagicMock()
+        await proc.close()
+        assert proc._pipeline is None

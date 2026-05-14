@@ -144,3 +144,62 @@ class TestSectorExtraction:
         for item in result:
             if item.startswith("sector:"):
                 assert ":" in item  # sector: prefix is distinguishable
+
+
+class TestAssetExtractorCompanies:
+    """Companies section + non-dict entries are tolerated."""
+
+    @pytest.fixture
+    def dictionary_path(self):
+        data = {
+            "version": "1.0.0",
+            "assets": {
+                "BTC/USDT": {"aliases": ["Bitcoin"]},
+                "BAD_ASSET": "not-a-dict",  # exercises the `not isinstance(info, dict)` skip
+            },
+            "sectors": {
+                "sector:crypto": {"keywords": ["crypto"]},
+                "BAD_SECTOR": "also-bad",
+            },
+            "companies": {
+                "company:COIN": {"aliases": ["Coinbase", "COIN"]},
+                "BAD_COMPANY": 42,
+            },
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
+            path = f.name
+        yield path
+        os.unlink(path)
+
+    def test_company_alias_extracted(self, dictionary_path):
+        extractor = AssetExtractor(dictionary_path, active_assets={"company:COIN"})
+        result = extractor.extract("Coinbase reports record quarterly revenue")
+        assert "company:COIN" in result
+
+    def test_non_dict_entries_skipped_not_crash(self, dictionary_path):
+        # The loader must tolerate stray non-dict values inside assets/sectors/companies.
+        extractor = AssetExtractor(
+            dictionary_path,
+            active_assets={"BTC/USDT", "sector:crypto", "company:COIN"},
+        )
+        # Patterns from the valid entries are loaded, bad ones are skipped.
+        canonical_ids = {cid for cid, _ in extractor._patterns}
+        assert canonical_ids == {"BTC/USDT", "sector:crypto", "company:COIN"}
+
+    def test_assets_value_is_not_a_dict(self):
+        """If `assets:` itself is not a dict (e.g. a list), loader skips silently."""
+        data = {
+            "version": "1.0.0",
+            "assets": ["this", "is", "wrong"],
+            "sectors": ["bad"],
+            "companies": "string",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(data, f)
+            path = f.name
+        try:
+            extractor = AssetExtractor(path, active_assets=set())
+            assert extractor._patterns == []
+        finally:
+            os.unlink(path)
