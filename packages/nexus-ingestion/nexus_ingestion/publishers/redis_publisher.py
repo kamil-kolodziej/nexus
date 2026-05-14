@@ -1,7 +1,8 @@
-"""Async Redis Stream publisher with in-memory buffer on disconnect."""
+"""Async Redis Stream publisher with self-healing buffer on disconnect."""
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from typing import TYPE_CHECKING, Any, cast
 
@@ -12,7 +13,13 @@ if TYPE_CHECKING:
 
 
 class RedisPublisher:
-    """Publishes events to a Redis Stream with buffering on disconnect."""
+    """Publishes events to a Redis Stream with a self-healing buffer.
+
+    On xadd failure, events are appended to a bounded in-memory deque. The next
+    successful publish drains the backlog in FIFO order via pipeline alongside
+    the new event, so order is preserved across the outage and recovery needs
+    no external orchestration.
+    """
 
     def __init__(
         self,
@@ -26,6 +33,7 @@ class RedisPublisher:
         self._maxlen = maxlen
         self._buffer: deque[dict[str, str]] = deque(maxlen=buffer_max)
         self._connected = True
+        self._lock = asyncio.Lock()
         self._logger = structlog.get_logger().bind(stream=stream)
 
     @property
@@ -36,15 +44,26 @@ class RedisPublisher:
     def buffer_size(self) -> int:
         return len(self._buffer)
 
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
     async def publish(self, fields: dict[str, str]) -> str | None:
         """Publish a single event to the Redis Stream.
 
+        If the buffer holds events from a prior outage, drains them and the new
+        event in a single pipeline. On failure, the new event joins the buffer
+        and None is returned. Concurrent callers serialize on an internal lock
+        so the backlog is drained exactly once.
+
         Returns the stream entry ID on success, None if buffered.
         """
-        if not self._connected:
-            self._buffer.append(fields)
-            return None
+        async with self._lock:
+            if not self._buffer:
+                return await self._xadd_single(fields)
+            return await self._xadd_with_drain(fields)
 
+    async def _xadd_single(self, fields: dict[str, str]) -> str | None:
         try:
             entry_id = await self._redis.xadd(
                 self._stream,
@@ -52,49 +71,49 @@ class RedisPublisher:
                 maxlen=self._maxlen,
                 approximate=True,
             )
-            return cast(str, entry_id)
-        except Exception:
+        except Exception as exc:
             self._logger.warning(
                 "redis_publish_failed",
                 buffer_size=len(self._buffer),
+                error=str(exc),
             )
             self._connected = False
             self._buffer.append(fields)
             return None
 
-    async def flush_buffer(self) -> int:
-        """Flush buffered events via pipeline after reconnection.
+        self._connected = True
+        return cast(str, entry_id)
 
-        Returns the number of flushed events.
-        """
-        if not self._buffer:
-            self._connected = True
-            return 0
-
-        flushed = 0
+    async def _xadd_with_drain(self, fields: dict[str, str]) -> str | None:
+        backlog_count = len(self._buffer)
         try:
             async with self._redis.pipeline(transaction=False) as pipe:
-                while self._buffer:
-                    fields = self._buffer.popleft()
+                for buffered in self._buffer:
                     pipe.xadd(
                         self._stream,
-                        fields,
+                        buffered,
                         maxlen=self._maxlen,
                         approximate=True,
                     )
-                    flushed += 1
-                await pipe.execute()
+                pipe.xadd(
+                    self._stream,
+                    fields,
+                    maxlen=self._maxlen,
+                    approximate=True,
+                )
+                results = await pipe.execute()
+        except Exception as exc:
+            self._logger.warning(
+                "redis_publish_failed",
+                buffer_size=backlog_count,
+                error=str(exc),
+            )
+            self._connected = False
+            self._buffer.append(fields)
+            return None
 
-            self._connected = True
-            self._logger.info("redis_buffer_flushed", flushed=flushed)
-            return flushed
-
-        except Exception:
-            self._logger.error("redis_buffer_flush_failed", events_remaining=len(self._buffer))
-            return 0
-
-    async def reconnect(self, redis: Redis[Any]) -> None:
-        """Update the Redis client after reconnection and flush buffer."""
-        self._redis = redis
+        for _ in range(backlog_count):
+            self._buffer.popleft()
         self._connected = True
-        await self.flush_buffer()
+        self._logger.info("redis_buffer_flushed", flushed=backlog_count)
+        return cast(str, results[-1])
