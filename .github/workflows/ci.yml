@@ -36,9 +36,9 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install packages
-        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]" -e "packages/nexus-sentiment[dev]"
       - name: Run unit tests
-        run: pytest packages/nexus-common/tests packages/nexus-ingestion/tests/unit --cov --cov-report=term-missing -q
+        run: pytest packages/nexus-common/tests packages/nexus-ingestion/tests/unit packages/nexus-sentiment/tests/unit --cov --cov-report=term-missing -q
 
   # Syrupy snapshot tests that verify Redis serialization format hasn't changed.
   # No Docker needed, but kept separate from unit tests so a snapshot drift shows up
@@ -53,9 +53,9 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install packages
-        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]" -e "packages/nexus-sentiment[dev]"
       - name: Run contract tests
-        run: pytest packages/nexus-ingestion/tests/contract --snapshot-warn-unused -q
+        run: pytest packages/nexus-ingestion/tests/contract packages/nexus-sentiment/tests/contract --snapshot-warn-unused -q
 
   # Tests against real Redis and TimescaleDB via testcontainers (Docker). Separated
   # because they add ~2-3 min of container startup overhead — unit tests shouldn't
@@ -70,9 +70,9 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install packages
-        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+        run: pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]" -e "packages/nexus-sentiment[dev]"
       - name: Run integration tests
-        run: pytest packages/nexus-ingestion/tests/integration -q
+        run: pytest packages/nexus-ingestion/tests/integration packages/nexus-sentiment/tests/integration -q
 
   # Scans all installed dependencies (including transitives) for known CVEs.
   # Separate job so a vulnerability finding is clearly distinguishable from a test failure.
@@ -87,7 +87,10 @@ jobs:
           cache: pip
       - name: Install packages and pip-audit
         run: |
-          pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]"
+          # setup-python ships pip 26.0.1, which has CVE-2026-3219 and CVE-2026-6357.
+          # Both are fixed in pip 26.1.
+          python -m pip install --upgrade "pip>=26.1"
+          pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]" -e "packages/nexus-sentiment[dev]"
           pip install pip-audit
       - name: Audit dependencies
         run: pip-audit

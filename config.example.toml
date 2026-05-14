@@ -38,6 +38,26 @@ malformed_rate_threshold = 2
 # log_env = "production"  # "development" → human-readable console; "production" → JSON (default)
 # Override via env var: NEXUS_LOG_ENV=development
 
+[sentiment]
+processor_type = "vader"               # "vader" (default) or "finbert" (requires [finbert] extra)
+input_stream = "nexus:news-events"
+output_stream = "nexus:sentiment-events"
+health_stream = "nexus:sentiment-health-events"
+consumer_group = "nexus-sentiment-group"
+block_timeout = 5000                   # ms to block on XREADGROUP
+pending_claim_threshold = 300          # seconds before pending message is claimed
+claim_sweep_interval = 60             # seconds between XAUTOCLAIM sweeps
+active_assets = ["BTC/USDT"]
+asset_dictionary_path = "data/asset_dictionary.yaml"
+output_maxlen = 50000
+health_maxlen = 5000
+batch_size = 500                       # TimescaleDB batch size
+flush_interval = 5.0                   # TimescaleDB flush interval (seconds)
+health_host = "127.0.0.1"
+health_port = 8081                     # 8081 to avoid conflict with ingestion on 8080
+max_fan_out = 50                       # max assets per article fan-out
+# log_env = "production"              # Override via NEXUS_LOG_ENV
+
 [supervisor]
 max_restart_attempts = 10
 restart_backoff_base = 1.0

@@ -118,6 +118,33 @@ class NewsArticle(BaseModel):
         return v
 
 
+class SentimentScore(BaseModel):
+    """Sentiment score produced by NLP inference on a news article."""
+
+    article_url: str = Field(min_length=1)
+    asset: str | None = None
+    score: float = Field(ge=-1.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    sentiment_label: Literal["positive", "negative", "neutral"]
+    model_id: str = Field(min_length=1)
+
+    @field_validator("asset")
+    @classmethod
+    def asset_not_empty_string(cls, v: str | None) -> str | None:
+        if v is not None and v == "":
+            msg = "asset must be None or non-empty string, not empty string"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("model_id")
+    @classmethod
+    def model_id_no_paths_or_credentials(cls, v: str) -> str:
+        if "/" in v:
+            msg = "model_id must not contain file paths (SRC-003)"
+            raise ValueError(msg)
+        return v
+
+
 # Map from EventType to payload class
 PAYLOAD_TYPE_MAP: dict[EventType, type[BaseModel]] = {
     EventType.TICK: Tick,
@@ -125,6 +152,7 @@ PAYLOAD_TYPE_MAP: dict[EventType, type[BaseModel]] = {
     EventType.TRADE: Trade,
     EventType.CANDLE: Candle,
     EventType.NEWS_ARTICLE: NewsArticle,
+    EventType.SENTIMENT_SCORE: SentimentScore,
 }
 
 
@@ -172,7 +200,7 @@ class MarketEvent(BaseModel):
             "timestamp": self.timestamp.isoformat(),
             "event_type": self.event_type.value,
             "schema_version": self.schema_version,
-            "payload": json.dumps(self.payload),
+            "payload": json.dumps(self.payload, default=str),
         }
 
     @classmethod

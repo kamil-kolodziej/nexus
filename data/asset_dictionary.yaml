@@ -1,0 +1,57 @@
+version: "1.0.0"
+
+assets:
+  BTC/USDT:
+    aliases:
+      - Bitcoin
+      - BTC
+      - bitcoin
+  ETH/USDT:
+    aliases:
+      - Ethereum
+      - ETH
+      - Ether
+  SOL/USDT:
+    aliases:
+      - Solana
+      - SOL
+
+sectors:
+  "sector:crypto":
+    keywords:
+      - crypto
+      - crypto market
+      - cryptocurrency
+      - cryptocurrency market
+      - defi
+      - nft
+      - nfts
+      - memecoin
+      - meme coin
+      - stablecoin
+      - stablecoins
+      - dex
+      - dapp
+      - blockchain
+      - on-chain
+      - onchain
+      - web3
+      - bitcoin
+      - ethereum
+      - altcoin
+  "sector:stocks":
+    keywords:
+      - stock market
+      - equities market
+      - stocks
+      - equity
+      - equities
+      - shares
+      - public listing
+      - ipo
+
+companies:
+  "company:COIN":
+    aliases:
+      - Coinbase
+      - COIN

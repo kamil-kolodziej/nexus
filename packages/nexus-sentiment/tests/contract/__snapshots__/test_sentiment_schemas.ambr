@@ -1,0 +1,11 @@
+# serializer version: 1
+# name: TestSentimentScoreContracts.test_sentiment_score_redis_serialization
+  dict({
+    'asset': 'BTC/USDT',
+    'event_type': 'SENTIMENT_SCORE',
+    'payload': '{"article_url": "https://example.com/article/btc-rally", "asset": "BTC/USDT", "confidence": 0.85, "model_id": "vader:3.3.2", "score": 0.75, "sentiment_label": "positive"}',
+    'schema_version': '1.0.0',
+    'source': 'nexus-sentiment:vader',
+    'timestamp': '2026-04-01T12:00:00+00:00',
+  })
+# ---

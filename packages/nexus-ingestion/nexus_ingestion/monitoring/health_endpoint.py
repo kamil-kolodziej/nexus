@@ -1,4 +1,8 @@
-"""FastAPI health endpoint for ingestion service."""
+"""FastAPI health endpoint for ingestion service.
+
+Implements the RFC draft-inadarei-api-health-check response format.
+See docs/design/nexus-trading-platform-design.md § Monitoring.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +12,15 @@ from typing import Any
 import structlog
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 logger = structlog.get_logger()
+
+HEALTH_MEDIA_TYPE = "application/health+json"
+
+
+def _status_code(status: str) -> int:
+    return 503 if status == "error" else 200
 
 
 def create_health_app() -> FastAPI:
@@ -17,19 +28,20 @@ def create_health_app() -> FastAPI:
     app = FastAPI(title="Nexus Ingestion Health", docs_url=None, redoc_url=None)
 
     @app.get("/health")
-    async def health() -> dict[str, Any]:
-        healths = app.state.adapter_healths() if hasattr(app.state, "adapter_healths") else []
-        adapters = [h.model_dump(mode="json") for h in healths]
-
-        # Overall status: ok if any adapter is connected, degraded otherwise
-        if not adapters:
-            status = "ok"
-        elif any(a["status"] == "CONNECTED" for a in adapters):
-            status = "ok"
+    async def health() -> JSONResponse:
+        if hasattr(app.state, "health_provider"):
+            body: dict[str, Any] = app.state.health_provider()
         else:
-            status = "degraded"
-
-        return {"status": status, "adapters": adapters}
+            body = {
+                "status": "ok",
+                "serviceId": "nexus-ingestion",
+                "checks": {},
+            }
+        return JSONResponse(
+            content=body,
+            status_code=_status_code(body.get("status", "ok")),
+            media_type=HEALTH_MEDIA_TYPE,
+        )
 
     return app
 
@@ -48,9 +60,9 @@ class HealthEndpoint:
     def app(self) -> FastAPI:
         return self._app
 
-    def set_adapter_healths_provider(self, provider: Any) -> None:
-        """Set the callable that returns list of AdapterHealth."""
-        self._app.state.adapter_healths = provider
+    def set_health_provider(self, provider: Any) -> None:
+        """Set the callable that returns the RFC-shaped health body as a dict."""
+        self._app.state.health_provider = provider
 
     async def start(self) -> None:
         """Start the uvicorn server as an asyncio task."""
@@ -62,7 +74,16 @@ class HealthEndpoint:
         )
         self._server = uvicorn.Server(config)
         self._task = asyncio.create_task(self._server.serve(), name="health-endpoint")
+        self._task.add_done_callback(self._on_task_done)
         logger.info("health_endpoint_started", port=self._port)
+
+    def _on_task_done(self, task: asyncio.Task[None]) -> None:
+        """FR-009 supervision: log if the health endpoint task crashes."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("health_endpoint_task_crashed", error=str(exc), exc_info=exc)
 
     async def stop(self) -> None:
         """Shutdown the server."""

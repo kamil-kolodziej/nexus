@@ -168,7 +168,9 @@ DOWN          — max reconnection attempts exhausted; still retrying but flagge
 
 ### AdapterHealth
 
-Runtime status per adapter, exposed via `GET /health`.
+Runtime status per adapter, exposed via `GET /health` in aggregated RFC-shaped
+summary: `status`, `serviceId`, `version`, and per-component `checks{}` where
+top-level `status` equals the worst component check status.
 
 | Field | Type | Description |
 |-------|------|-------------|

@@ -4,6 +4,7 @@ addopts = "--import-mode=importlib"
 testpaths = [
     "packages/nexus-common/tests",
     "packages/nexus-ingestion/tests",
+    "packages/nexus-sentiment/tests",
 ]
 
 [tool.ruff]
@@ -37,6 +38,7 @@ warn_unreachable = true
 warn_unused_ignores = true
 show_error_codes = true
 explicit_package_bases = true
+mypy_path = "packages/nexus-common:packages/nexus-ingestion:packages/nexus-sentiment"
 # pydantic plugin for model-aware type checking
 plugins = ["pydantic.mypy"]
 
@@ -52,6 +54,10 @@ module = [
     "uvicorn.*",
     "uvloop.*",
     "testcontainers.*",
+    "vaderSentiment.*",
+    "transformers.*",
+    "torch.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 
@@ -70,6 +76,7 @@ branch = true
 source = [
     "nexus_common",
     "nexus_ingestion",
+    "nexus_sentiment",
 ]
 omit = [
     "*/tests/*",
@@ -91,3 +98,4 @@ exclude_also = [
 [tool.coverage.paths]
 nexus_common = ["packages/nexus-common/nexus_common"]
 nexus_ingestion = ["packages/nexus-ingestion/nexus_ingestion"]
+nexus_sentiment = ["packages/nexus-sentiment/nexus_sentiment"]

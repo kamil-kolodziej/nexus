@@ -101,22 +101,17 @@ You should see events within 5 seconds of startup.
 curl http://localhost:8080/health
 ```
 
-Expected response:
+Expected response (RFC `application/health+json`):
 
 ```json
 {
   "status": "ok",
-  "adapters": [
-    {
-      "adapter_id": "binance:exchange",
-      "adapter_type": "exchange",
-      "status": "CONNECTED",
-      "last_event_at": "2026-03-22T14:30:00.123Z",
-      "event_count": 42,
-      "error_count": 0,
-      "malformed_count": 0
-    }
-  ]
+  "serviceId": "nexus-ingestion",
+  "version": "1.0.0",
+  "checks": {
+    "adapter:connections": { "status": "ok", "observedValue": 1 },
+    "redis:publisher": { "status": "ok", "observedValue": 0 }
+  }
 }
 ```
 

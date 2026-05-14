@@ -31,3 +31,21 @@ CREATE TABLE IF NOT EXISTS health_alerts (
 );
 
 SELECT create_hypertable('health_alerts', 'time', if_not_exists => TRUE);
+
+-- Sentiment scores hypertable
+CREATE TABLE IF NOT EXISTS sentiment_scores (
+    time            TIMESTAMPTZ NOT NULL,
+    source          TEXT NOT NULL,
+    asset           TEXT,
+    article_url     TEXT NOT NULL,
+    score           DOUBLE PRECISION NOT NULL,
+    confidence      DOUBLE PRECISION NOT NULL,
+    sentiment_label TEXT NOT NULL,
+    model_id        TEXT NOT NULL,
+    schema_version  TEXT NOT NULL DEFAULT '1.0.0'
+);
+
+SELECT create_hypertable('sentiment_scores', 'time', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS idx_sentiment_scores_asset
+    ON sentiment_scores (asset, time DESC);

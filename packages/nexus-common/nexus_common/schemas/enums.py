@@ -11,6 +11,7 @@ class EventType(StrEnum):
     TRADE = "TRADE"
     CANDLE = "CANDLE"
     NEWS_ARTICLE = "NEWS_ARTICLE"
+    SENTIMENT_SCORE = "SENTIMENT_SCORE"
 
 
 class AdapterStatus(StrEnum):

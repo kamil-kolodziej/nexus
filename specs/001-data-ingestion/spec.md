@@ -27,7 +27,7 @@ As the platform operator, I want live price ticks, order book updates, and trade
 
 1. **Given** the ingestion service is running and connected to Binance, **When** a price tick occurs on BTC/USDT, **Then** a `MarketEvent` of type `Tick` with correct `source`, `asset`, `timestamp`, and `payload` fields is published to the Redis Stream within 1 second.
 2. **Given** the ingestion service is connected, **When** 60 seconds elapse, **Then** OHLCV candle events of type `Candle` appear in the stream with correct open/high/low/close/volume values.
-3. **Given** the ingestion service is running, **When** it is inspected via the health endpoint, **Then** it reports connection status, last event timestamp, and event count per source.
+3. **Given** the ingestion service is running, **When** it is inspected via the health endpoint, **Then** it returns an RFC-shaped response with `status`, `serviceId`, `version`, and per-component `checks{}` where `adapter:connections` reflects the aggregated adapter connection state.
 
 ---
 
@@ -87,7 +87,7 @@ As a strategy developer, I want news articles from external sources to flow into
 - **FR-002**: All events MUST be normalized into the shared `MarketEvent` schema with fields: `source`, `asset`, `timestamp`, `event_type`, `payload`.
 - **FR-003**: The service MUST automatically reconnect to exchanges after WebSocket disconnection using exponential backoff without requiring a manual restart. Before each restart attempt the adapter MUST be stopped to release connections and reset internal state.
 - **FR-004**: Each adapter MUST run as an independent async task so that one adapter failing or disconnecting does not affect others.
-- **FR-005**: The service MUST expose a health endpoint reporting per-adapter status: connection state, last event timestamp, and event count.
+- **FR-005**: The service MUST expose a health endpoint at `GET /health` returning RFC `application/health+json` format with 3-state top-level `status` (`ok`/`degraded`/`error`), `serviceId`, `version`, and per-component `checks{}`. HTTP 503 when `status == "error"`, 200 otherwise. Component checks include `adapter:connections` (aggregated adapter state), `redis:publisher` (connection + buffer state), and `timescale:writer` when configured.
 - **FR-006**: News adapters MUST fetch from at least one configurable RSS source on a configurable polling interval and publish `NewsArticle` events to the Redis Stream. Source type is validated at startup via `NewsSourceType` enum; unsupported types are rejected before any async work begins.
 - **FR-007**: The ingestion service is responsible only for publishing `NewsArticle` events to Redis. A separate `nexus-sentiment` service consumes `NewsArticle` events and publishes `SentimentScore` events with a score in `[-1.0, 1.0]` and a confidence value. (Sentiment service is specified separately.)
 - **FR-008**: The service MUST persist all published events to TimescaleDB asynchronously for historical replay and backtesting. Events MUST be published to Redis immediately; persistence to TimescaleDB happens in a background task with its own queue and retry logic. If TimescaleDB is unavailable, events remain in the background queue until it recovers; the Redis stream is unaffected.
@@ -116,7 +116,7 @@ As a strategy developer, I want news articles from external sources to flow into
 - **Candle**: OHLCV payload with `open`, `high`, `low`, `close`, `volume`, `timeframe`.
 - **NewsArticle**: Payload with `headline`, `body_summary`, `url`, `source_name`, `published_at`, `related_assets` (list, may be empty).
 - **SentimentScore**: Payload produced by the separate `nexus-sentiment` service (not ingestion). Contains `news_article_event_id` (reference to originating NewsArticle event), `score` (float, -1.0 to 1.0), `confidence` (float, 0.0 to 1.0), `model_version` (string). Published to the same Redis Stream as market events.
-- **AdapterHealth**: Per-adapter runtime status: `adapter_id`, `adapter_type`, `status` (CONNECTED / RECONNECTING / DOWN), `last_event_at`, `event_count`, `error_count`, `malformed_count`.
+- **AdapterHealth**: Per-adapter runtime status: `adapter_id`, `adapter_type`, `status` (CONNECTED / RECONNECTING / DOWN), `last_event_at`, `event_count`, `error_count`, `malformed_count`. Exposed via `GET /health` in aggregated form under `checks{}`.
 
 ## Assumptions
 
@@ -134,5 +134,5 @@ As a strategy developer, I want news articles from external sources to flow into
 - **SC-002**: After a simulated exchange WebSocket disconnection, the service resumes publishing events for the affected exchange within 30 seconds without manual intervention.
 - **SC-003**: Under steady-state operation (all infrastructure healthy, excluding outage windows), 100% of events published to Redis are also persisted to TimescaleDB within 10 seconds, verified by record count comparison over a 10-minute observation window.
 - **SC-004**: Zero events from a failed adapter affect the event stream of other adapters — each adapter's failure is fully isolated.
-- **SC-005**: The health endpoint responds within 200ms and reflects the true connection status of each adapter.
+- **SC-005**: The health endpoint responds within 200ms, returns `application/health+json`, and accurately reflects component state in the `checks{}` object with top-level `status` equal to the worst component status. HTTP status is `503` when `status == "error"`, `200` otherwise.
 - **SC-006**: No exchange API credentials appear in application logs, metrics, or event payloads under any operational condition.

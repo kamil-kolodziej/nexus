@@ -17,7 +17,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: nexus
-      POSTGRES_PASSWORD: nexus_dev
+      POSTGRES_PASSWORD: nexus_dev  # pragma: allowlist secret
       POSTGRES_DB: nexus
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
