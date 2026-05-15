@@ -1,4 +1,8 @@
-"""Unit tests for the sentiment RedisPublisher."""
+"""Unit tests for the sentiment RedisPublisher.
+
+Tests buffer behavior on disconnect, self-healing pipeline flush on
+recovery, MAXLEN configuration, and event ordering preservation.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,16 @@ def _pipeline_cm(execute_mock: AsyncMock, xadd_mock: MagicMock) -> MagicMock:
     cm.__aenter__ = AsyncMock(return_value=pipe)
     cm.__aexit__ = AsyncMock(return_value=False)
     return cm
+
+
+def _always_failing_redis() -> MagicMock:
+    """Mock Redis where both xadd and pipeline.execute always raise."""
+    execute = AsyncMock(side_effect=ConnectionError("Redis down"))
+    xadd_in_pipe = MagicMock()
+    redis = MagicMock()
+    redis.xadd = AsyncMock(side_effect=ConnectionError("Redis down"))
+    redis.pipeline = MagicMock(return_value=_pipeline_cm(execute, xadd_in_pipe))
+    return redis
 
 
 @pytest.fixture
@@ -38,6 +52,7 @@ class TestRedisPublisherPublish:
             "nexus:sentiment-events", {"k": "v"}, maxlen=50000, approximate=True
         )
         assert pub.buffer_size == 0
+        assert pub.connected is True
 
     async def test_publish_uses_configured_maxlen(self, redis):
         redis.xadd = AsyncMock(return_value="1-0")
@@ -47,17 +62,6 @@ class TestRedisPublisherPublish:
 
         assert redis.xadd.await_args.kwargs["maxlen"] == 123
 
-    async def test_publish_when_disconnected_buffers_without_calling_xadd(self, redis):
-        redis.xadd = AsyncMock()
-        pub = RedisPublisher(redis, stream="s")
-        pub._connected = False
-
-        result = await pub.publish({"a": "1"})
-
-        assert result is None
-        redis.xadd.assert_not_awaited()
-        assert pub.buffer_size == 1
-
     async def test_publish_xadd_failure_marks_disconnected_and_buffers(self, redis):
         redis.xadd = AsyncMock(side_effect=ConnectionError("boom"))
         pub = RedisPublisher(redis, stream="s")
@@ -65,12 +69,11 @@ class TestRedisPublisherPublish:
         result = await pub.publish({"a": "1"})
 
         assert result is None
-        assert pub._connected is False
+        assert pub.connected is False
         assert pub.buffer_size == 1
 
-    async def test_buffer_bounded_drops_oldest(self, redis):
-        pub = RedisPublisher(redis, stream="s", buffer_max=2)
-        pub._connected = False
+    async def test_buffer_bounded_drops_oldest(self):
+        pub = RedisPublisher(_always_failing_redis(), stream="s", buffer_max=2)
 
         await pub.publish({"n": "1"})
         await pub.publish({"n": "2"})
@@ -81,74 +84,98 @@ class TestRedisPublisherPublish:
         assert list(pub._buffer) == [{"n": "2"}, {"n": "3"}]
 
 
-class TestRedisPublisherFlushBuffer:
-    """flush_buffer() drains buffered events via pipeline."""
+class TestSelfHealingRecovery:
+    """publish() drains the buffer in FIFO order on the next successful call."""
 
-    async def test_empty_buffer_returns_zero_and_marks_connected(self, redis):
-        pub = RedisPublisher(redis, stream="s")
-        pub._connected = False
+    @staticmethod
+    def _redis_with_pipeline_side_effects(
+        execute_side_effect: list[object],
+    ) -> tuple[MagicMock, MagicMock]:
+        """Build a redis mock whose xadd always fails and whose pipeline.execute
+        consumes the given side_effect list. Returns (redis_mock, xadd_in_pipe_mock).
+        """
+        xadd_in_pipe = MagicMock()
+        execute = AsyncMock(side_effect=execute_side_effect)
+        redis = MagicMock()
+        redis.xadd = AsyncMock(side_effect=ConnectionError("down"))
+        redis.pipeline = MagicMock(return_value=_pipeline_cm(execute, xadd_in_pipe))
+        return redis, xadd_in_pipe
 
-        flushed = await pub.flush_buffer()
+    async def test_next_successful_publish_drains_backlog(self):
+        # publish 0: single xadd path fails -> buffer=[0]
+        # publish 1: drain path fails -> buffer=[0, 1]
+        # publish 2: drain path succeeds -> buffer=[]
+        redis, _ = self._redis_with_pipeline_side_effects(
+            [ConnectionError("still down"), ["10-0", "20-0", "30-0"]]
+        )
+        pub = RedisPublisher(redis, stream="s", buffer_max=100)
 
-        assert flushed == 0
-        assert pub._connected is True
+        assert await pub.publish({"n": "0"}) is None
+        assert await pub.publish({"n": "1"}) is None
+        assert pub.buffer_size == 2
+        assert pub.connected is False
 
-    async def test_flushes_buffered_events_via_pipeline(self, redis):
-        xadd = MagicMock()
-        execute = AsyncMock(return_value=["1-0", "1-1"])
-        redis.pipeline = MagicMock(return_value=_pipeline_cm(execute, xadd))
+        entry_id = await pub.publish({"n": "2"})
 
-        pub = RedisPublisher(redis, stream="s")
-        pub._connected = False
-        pub._buffer.append({"a": "1"})
-        pub._buffer.append({"b": "2"})
-
-        flushed = await pub.flush_buffer()
-
-        assert flushed == 2
+        assert entry_id == "30-0"
         assert pub.buffer_size == 0
-        assert pub._connected is True
-        assert xadd.call_count == 2
-        execute.assert_awaited_once()
+        assert pub.connected is True
 
-    async def test_flush_failure_keeps_events_buffered(self, redis):
-        xadd = MagicMock()
-        execute = AsyncMock(side_effect=ConnectionError("pipeline down"))
-        redis.pipeline = MagicMock(return_value=_pipeline_cm(execute, xadd))
+    async def test_drain_failure_keeps_events_buffered(self):
+        redis, _ = self._redis_with_pipeline_side_effects(
+            [ConnectionError("still down"), ConnectionError("still down")]
+        )
+        pub = RedisPublisher(redis, stream="s", buffer_max=100)
+
+        await pub.publish({"n": "0"})
+        await pub.publish({"n": "1"})
+        result = await pub.publish({"n": "2"})
+
+        assert result is None
+        assert pub.buffer_size == 3
+        assert pub.connected is False
+
+    async def test_drain_preserves_fifo_order(self):
+        captured: list[dict[str, str]] = []
+
+        # 4 drain attempts fail (after the first single-xadd failure on
+        # publish 0). The 5th drain succeeds with all 5 events pipelined.
+        def capture(stream: str, fields: dict[str, str], **kwargs: object) -> None:
+            captured.append(fields)
+
+        xadd_in_pipe = MagicMock(side_effect=capture)
+        execute = AsyncMock(
+            side_effect=[
+                ConnectionError("down"),
+                ConnectionError("down"),
+                ConnectionError("down"),
+                ["1-0", "2-0", "3-0", "4-0", "5-0"],
+            ]
+        )
+        redis = MagicMock()
+        redis.xadd = AsyncMock(side_effect=ConnectionError("down"))
+        redis.pipeline = MagicMock(return_value=_pipeline_cm(execute, xadd_in_pipe))
+
+        pub = RedisPublisher(redis, stream="s", buffer_max=100)
+        for i in range(5):
+            await pub.publish({"n": str(i)})
+
+        final_drain_payloads = [c["n"] for c in captured[-5:]]
+        assert final_drain_payloads == [str(i) for i in range(5)]
+        assert pub.buffer_size == 0
+        assert pub.connected is True
+
+    async def test_empty_buffer_takes_single_xadd_path(self):
+        redis = MagicMock()
+        redis.xadd = AsyncMock(return_value="1-0")
+        redis.pipeline = MagicMock()
 
         pub = RedisPublisher(redis, stream="s")
-        pub._connected = False
-        pub._buffer.append({"a": "1"})
+        entry_id = await pub.publish({"k": "v"})
 
-        flushed = await pub.flush_buffer()
-
-        assert flushed == 0
-        # The current implementation popleft()s before execute(); on failure the
-        # popped events are lost. Document the behavior we observe today so a
-        # future fix surfaces in this test.
-        assert pub.buffer_size == 0
-
-
-class TestRedisPublisherReconnect:
-    """reconnect() swaps the client and flushes the buffer."""
-
-    async def test_reconnect_replaces_client_and_flushes(self):
-        old = AsyncMock()
-        pub = RedisPublisher(old, stream="s")
-        pub._connected = False
-        pub._buffer.append({"a": "1"})
-
-        new = AsyncMock()
-        xadd = MagicMock()
-        execute = AsyncMock(return_value=["1-0"])
-        new.pipeline = MagicMock(return_value=_pipeline_cm(execute, xadd))
-
-        await pub.reconnect(new)
-
-        assert pub._redis is new
-        assert pub._connected is True
-        assert pub.buffer_size == 0
-        execute.assert_awaited_once()
+        assert entry_id == "1-0"
+        assert redis.pipeline.call_count == 0
+        assert pub.connected is True
 
 
 class TestRedisPublisherProperties:
@@ -161,3 +188,9 @@ class TestRedisPublisherProperties:
         assert pub.buffer_size == 0
         pub._buffer.append({"a": "1"})
         assert pub.buffer_size == 1
+
+    def test_connected_property(self, redis):
+        pub = RedisPublisher(redis, stream="s")
+        assert pub.connected is True
+        pub._connected = False
+        assert pub.connected is False
