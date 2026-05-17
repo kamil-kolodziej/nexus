@@ -2,6 +2,8 @@
 
 A fully automated multi-asset trading platform with seconds-level execution. Multiple pluggable weighted strategies — technical, ML, sentiment, on-chain, statistical, arbitrage — run independently and produce signals. A signal aggregation layer combines those signals into trade decisions, which then pass through a 5-layer risk manager before reaching the execution engine.
 
+![Nexus dashboard preview](nexus.gif)
+
 ## What makes it different
 
 Most trading platforms run one strategy at a time, or let multiple strategies operate independently without coordinating. Nexus takes a different approach:
