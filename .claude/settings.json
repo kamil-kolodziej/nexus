@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__redis__client_list",
+      "mcp__redis__dbsize",
+      "mcp__redis__get",
+      "mcp__redis__get_index_info",
+      "mcp__redis__get_indexed_keys_number",
+      "mcp__redis__get_indexes",
+      "mcp__redis__get_vector_from_hash",
+      "mcp__redis__hexists",
+      "mcp__redis__hget",
+      "mcp__redis__hgetall",
+      "mcp__redis__hybrid_search",
+      "mcp__redis__info",
+      "mcp__redis__json_get",
+      "mcp__redis__llen",
+      "mcp__redis__lrange",
+      "mcp__redis__scan_all_keys",
+      "mcp__redis__scan_keys",
+      "mcp__redis__search_redis_documents",
+      "mcp__redis__smembers",
+      "mcp__redis__type",
+      "mcp__redis__vector_search_hash",
+      "mcp__redis__xrange",
+      "mcp__redis__zrange"
+    ]
+  }
+}
