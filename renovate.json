@@ -1,8 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:base"],
+  "extends": ["config:base", "helpers:pinGitHubActionDigests"],
   "labels": ["dependencies"],
   "packageRules": [
+    {
+      "description": "GitHub Actions are pinned to commit SHAs — group digest bumps into one weekly PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "schedule": ["on monday"],
+      "automerge": false
+    },
     {
       "description": "Group all dev dependency bumps into one weekly PR",
       "matchDepTypes": ["dev"],
