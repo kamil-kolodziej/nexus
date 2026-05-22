@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege by default. Jobs that need more (SARIF upload) opt in explicitly.
+permissions:
+  contents: read
 
 jobs:
   # Runs ruff, mypy, bandit, detect-secrets. No Python deps needed — fast fail before
@@ -14,8 +17,8 @@ jobs:
     name: Static analysis (pre-commit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -30,8 +33,8 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -47,8 +50,8 @@ jobs:
     name: Contract tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -64,8 +67,8 @@ jobs:
     name: Integration tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -80,8 +83,8 @@ jobs:
     name: Dependency vulnerability scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -90,7 +93,41 @@ jobs:
           # setup-python ships pip 26.0.1, which has CVE-2026-3219 and CVE-2026-6357.
           # Both are fixed in pip 26.1.
           python -m pip install --upgrade "pip>=26.1"
-          pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]" -e "packages/nexus-sentiment[dev]"
+          # [finbert] is included so torch/transformers — a large CVE surface — are audited
+          # alongside the runtime deps, not silently skipped.
+          pip install -e "packages/nexus-common[dev]" -e "packages/nexus-ingestion[dev]" -e "packages/nexus-sentiment[dev,finbert]"
           pip install pip-audit
       - name: Audit dependencies
         run: pip-audit
+
+  # Builds each service image and scans it for OS- and library-level CVEs (base image,
+  # apt packages, site-packages). Findings upload to the Security tab as code-scanning
+  # alerts. Separate job — an image CVE is an infra concern, not a code regression.
+  image-scan:
+    name: Container image scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # required to upload SARIF
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [nexus-ingestion, nexus-sentiment]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - name: Build image
+        run: docker build -f packages/${{ matrix.service }}/Dockerfile -t ${{ matrix.service }}:ci .
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ matrix.service }}:ci
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          ignore-unfixed: true # only flag CVEs with an available fix
+          severity: CRITICAL,HIGH
+      - name: Upload Trivy results to Security tab
+        uses: github/codeql-action/upload-sarif@f52b05f4acaaa234e44466e66d29050e135ea9ef # v4.36.0
+        if: always() # surface findings even if a later step fails
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
