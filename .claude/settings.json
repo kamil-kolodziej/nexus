@@ -23,7 +23,8 @@
       "mcp__redis__type",
       "mcp__redis__vector_search_hash",
       "mcp__redis__xrange",
-      "mcp__redis__zrange"
+      "mcp__redis__zrange",
+      "Bash(pytest packages/*)"
     ]
   }
 }
